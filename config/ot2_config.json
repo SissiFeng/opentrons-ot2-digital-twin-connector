@@ -54,5 +54,6 @@
   "serial_port": "/dev/ttyAMA0",
   "with_robot_server": true,
   "robot_server_uds": "/run/aiohttp.sock",
-  "lock_timeout_s": null
+  "lock_timeout_s": null,
+  "digital_twin_config_path": "/var/lib/opentrons-ot2-dt/config.json"
 }

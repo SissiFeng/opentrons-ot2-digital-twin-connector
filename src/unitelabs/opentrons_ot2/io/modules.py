@@ -29,6 +29,10 @@ _MODULE_PORT_REGEX = re.compile(
 )
 
 
+class AmbiguousModuleConfigurationError(RuntimeError):
+    """Multiple modules of one type require serial-routed features; disconnect extras or configure routing."""
+
+
 def scan_module_ports() -> dict[str, str]:
     """
     Return {module_type: port_path} for every module symlink found in /dev.
@@ -44,6 +48,13 @@ def scan_module_ports() -> dict[str, str]:
         name = match.group(1).lower()
         module_type = _MODULE_NAME_MAP.get(name)
         if module_type:
+            if module_type in found:
+                msg = (
+                    f"Multiple {module_type} modules were detected at {found[module_type]} and {p}. "
+                    "This connector cannot route duplicate module feature identifiers by serial number, "
+                    "so startup is blocked."
+                )
+                raise AmbiguousModuleConfigurationError(msg)
             log.info("Detected module '%s' at %s", module_type, p)
             found[module_type] = str(p)
 

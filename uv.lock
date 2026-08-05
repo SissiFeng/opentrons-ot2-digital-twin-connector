@@ -1748,6 +1748,56 @@ wheels = [
 ]
 
 [[package]]
+name = "sissifeng-opentrons-ot2-dt-connector"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "jsonschema" },
+    { name = "numpy", version = "1.24.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "opentrons", version = "8.8.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "opentrons", version = "9.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "unitelabs-cdk" },
+    { name = "uvicorn" },
+    { name = "wsproto" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "commitizen" },
+    { name = "pre-commit" },
+    { name = "ruff" },
+    { name = "unitelabs-cdk", extra = ["dev"] },
+]
+test = [
+    { name = "httpx" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "commitizen", marker = "extra == 'dev'" },
+    { name = "httpx", marker = "extra == 'test'" },
+    { name = "jsonschema", specifier = ">=4.25" },
+    { name = "numpy", marker = "python_full_version < '3.12'", specifier = "<1.25" },
+    { name = "numpy", marker = "python_full_version >= '3.12'", specifier = ">=1.26,<2" },
+    { name = "opentrons", marker = "python_full_version < '3.12'", specifier = "==8.8.1" },
+    { name = "opentrons", marker = "python_full_version >= '3.12'", specifier = "==9.0.0" },
+    { name = "pre-commit", marker = "extra == 'dev'" },
+    { name = "pytest", marker = "extra == 'test'" },
+    { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "pytest-cov", marker = "extra == 'test'" },
+    { name = "ruff", marker = "extra == 'dev'" },
+    { name = "unitelabs-cdk", specifier = "~=0.9.0" },
+    { name = "unitelabs-cdk", extras = ["dev"], marker = "extra == 'dev'" },
+    { name = "uvicorn", specifier = ">=0.20" },
+    { name = "wsproto" },
+]
+provides-extras = ["test", "dev"]
+
+[[package]]
 name = "six"
 version = "1.17.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1930,54 +1980,6 @@ dev = [
     { name = "ruff" },
     { name = "watchfiles" },
 ]
-
-[[package]]
-name = "unitelabs-opentrons-ot2"
-version = "0.5.0"
-source = { editable = "." }
-dependencies = [
-    { name = "numpy", version = "1.24.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
-    { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "opentrons", version = "8.8.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
-    { name = "opentrons", version = "9.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "unitelabs-cdk" },
-    { name = "uvicorn" },
-    { name = "wsproto" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "commitizen" },
-    { name = "pre-commit" },
-    { name = "ruff" },
-    { name = "unitelabs-cdk", extra = ["dev"] },
-]
-test = [
-    { name = "httpx" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "commitizen", marker = "extra == 'dev'" },
-    { name = "httpx", marker = "extra == 'test'" },
-    { name = "numpy", marker = "python_full_version < '3.12'", specifier = "<1.25" },
-    { name = "numpy", marker = "python_full_version >= '3.12'", specifier = ">=1.26,<2" },
-    { name = "opentrons", marker = "python_full_version < '3.12'", specifier = "==8.8.1" },
-    { name = "opentrons", marker = "python_full_version >= '3.12'", specifier = "==9.0.0" },
-    { name = "pre-commit", marker = "extra == 'dev'" },
-    { name = "pytest", marker = "extra == 'test'" },
-    { name = "pytest-asyncio", marker = "extra == 'test'" },
-    { name = "pytest-cov", marker = "extra == 'test'" },
-    { name = "ruff", marker = "extra == 'dev'" },
-    { name = "unitelabs-cdk", specifier = "~=0.9.0" },
-    { name = "unitelabs-cdk", extras = ["dev"], marker = "extra == 'dev'" },
-    { name = "uvicorn", specifier = ">=0.20" },
-    { name = "wsproto" },
-]
-provides-extras = ["test", "dev"]
 
 [[package]]
 name = "unitelabs-sila"

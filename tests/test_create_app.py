@@ -49,6 +49,7 @@ async def _run_app(config: OpentronsOt2Config, module_ports: dict):
         patch("unitelabs.opentrons_ot2.TemperatureModuleController.build", return_value=mock_temp_ctrl),
         patch("unitelabs.opentrons_ot2.MagneticModuleController.build", return_value=mock_mag_ctrl),
         patch("unitelabs.opentrons_ot2.scan_module_ports", return_value=module_ports),
+        patch("unitelabs.opentrons_ot2._register_digital_twin_features", new_callable=AsyncMock),
         patch("unitelabs.opentrons_ot2.Connector", return_value=mock_connector),
     ):
         gen = create_app(config)
@@ -149,6 +150,7 @@ async def test_all_controllers_disconnected_on_shutdown():
         patch("unitelabs.opentrons_ot2.TemperatureModuleController.build", return_value=mock_temp_ctrl),
         patch("unitelabs.opentrons_ot2.MagneticModuleController.build", return_value=mock_mag_ctrl),
         patch("unitelabs.opentrons_ot2.scan_module_ports", return_value=_ALL_MODULE_PORTS),
+        patch("unitelabs.opentrons_ot2._register_digital_twin_features", new_callable=AsyncMock),
         patch("unitelabs.opentrons_ot2.Connector", return_value=MagicMock()),
     ):
         gen = create_app(config)

@@ -69,6 +69,7 @@ async def _run(config=_CONFIG, module_ports=None):
         ),
         patch("unitelabs.opentrons_ot2.OT2MotionController.from_api", return_value=MagicMock()),
         patch("unitelabs.opentrons_ot2.scan_module_ports", return_value=module_ports or {}),
+        patch("unitelabs.opentrons_ot2._register_digital_twin_features", new_callable=AsyncMock),
         patch("unitelabs.opentrons_ot2.Connector", return_value=mock_connector),
         patch("uvicorn.Server", return_value=mock_uv_server),
         patch("uvicorn.Config"),
@@ -119,6 +120,7 @@ async def test_hardware_built_on_configured_port():
         ) as mock_build,
         patch("unitelabs.opentrons_ot2.OT2MotionController.from_api", return_value=MagicMock()),
         patch("unitelabs.opentrons_ot2.scan_module_ports", return_value={}),
+        patch("unitelabs.opentrons_ot2._register_digital_twin_features", new_callable=AsyncMock),
         patch("unitelabs.opentrons_ot2.Connector", return_value=MagicMock()),
         patch(
             "uvicorn.Server",
@@ -172,6 +174,7 @@ async def test_uvicorn_configured_on_unix_socket():
         ),
         patch("unitelabs.opentrons_ot2.OT2MotionController.from_api", return_value=MagicMock()),
         patch("unitelabs.opentrons_ot2.scan_module_ports", return_value={}),
+        patch("unitelabs.opentrons_ot2._register_digital_twin_features", new_callable=AsyncMock),
         patch("unitelabs.opentrons_ot2.Connector", return_value=MagicMock()),
         patch(
             "uvicorn.Server",

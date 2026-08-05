@@ -1,11 +1,11 @@
 [project]
-name = "unitelabs-opentrons-ot2"
-version = "0.5.0"
-description = "A SiLA2 connector for the Opentrons OT-2 liquid handling robot"
+name = "sissifeng-opentrons-ot2-dt-connector"
+version = "0.1.0"
+description = "An independent SiLA2 and digital-twin connector for the Opentrons OT-2"
 readme = "README.md"
-authors = [{name = "Acceleration Consortium", email = "developers@accelerationconsortium.ca"},]
+authors = [{name = "Sissi Feng", email = "isissifeng@gmail.com"}]
 maintainers = [
-   {name = "Acceleration Consortium", email ="developers@accelerationconsortium.ca"},
+   {name = "Sissi Feng", email = "isissifeng@gmail.com"},
 ]
 classifiers = [
     "Intended Audience :: Developers",
@@ -28,14 +28,14 @@ dependencies=[
     "opentrons==9.0.0; python_version >= '3.12'",
     "numpy<1.25; python_version < '3.12'",
     "numpy>=1.26,<2; python_version >= '3.12'",
+    "jsonschema>=4.25",
     "uvicorn>=0.20",
     "wsproto",
 ]
 
-[project.urls]
-repository = "https://github.com/AccelerationConsortium/sila2-ot2"
-documentation = "https://github.com/AccelerationConsortium/sila2-ot2/-/README.md"
-"Bug Tracker" = "https://github.com/AccelerationConsortium/sila2-ot2/-/issues"
+[project.scripts]
+ot2-contract-check = "unitelabs.opentrons_ot2.digital_twin.contract_cli:main"
+ot2-matterix-preflight = "unitelabs.opentrons_ot2.matterix.preflight:main"
 
 [project.optional-dependencies]
 test = [

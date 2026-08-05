@@ -51,5 +51,6 @@
     }
   },
   "use_simulator": false,
-  "serial_port": "/dev/ttyAMA0"
+  "serial_port": "/dev/ttyAMA0",
+  "digital_twin_config_path": "/var/lib/opentrons-ot2-dt/config.json"
 }

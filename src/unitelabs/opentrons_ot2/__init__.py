@@ -1,17 +1,28 @@
 import asyncio
 import collections.abc
 import dataclasses
+import json
 import logging
 from importlib.metadata import version
+from importlib.resources import files
 
 from unitelabs.cdk import Connector, ConnectorBaseConfig, SiLAServerConfig
 
+from .digital_twin.config import DT_CONFIG_SCHEMA_VERSION, DigitalTwinConfig
+from .digital_twin.contract import ContractSnapshot, build_contract_snapshot
 from .features import (
     CalibrationFeature,
+    DeckConfigurationProvider,
+    DeviceInformationProvider,
+    DigitalTwinLiquidHandlingController,
+    DigitalTwinMotionController,
+    DigitalTwinPipetteController,
+    DigitalTwinTipController,
     HeaterShakerFeature,
     MagneticModuleFeature,
     MotionControlFeature,
     PipetteFeature,
+    RobotStateProvider,
     TemperatureModuleFeature,
     ThermocyclerFeature,
 )
@@ -20,6 +31,7 @@ from .io import (
     HeaterShakerController,
     MagneticModuleController,
     OT2MotionController,
+    OT2DigitalTwinController,
     TemperatureModuleController,
     ThermocyclerController,
     scan_module_ports,
@@ -27,7 +39,7 @@ from .io import (
 
 log = logging.getLogger(__name__)
 
-__version__ = version("unitelabs-opentrons-ot2")
+__version__ = version("sissifeng-opentrons-ot2-dt-connector")
 
 
 @dataclasses.dataclass
@@ -74,6 +86,9 @@ class OpentronsOt2Config(ConnectorBaseConfig):
     Useful for simulator/testing environments where a Unix socket is not needed.
     """
 
+    digital_twin_config_path: str = "config/ot2_dt_config.json"
+    """Path to the versioned deck, labware, pipette, and calibration configuration."""
+
     sila_server: SiLAServerConfig = dataclasses.field(
         default_factory=lambda: SiLAServerConfig(
             name="Opentrons OT-2",
@@ -83,6 +98,56 @@ class OpentronsOt2Config(ConnectorBaseConfig):
             vendor_url="https://opentrons.com/",
         )
     )
+
+
+async def _register_digital_twin_features(
+    app: Connector,
+    motion_controller: OT2MotionController,
+    config: OpentronsOt2Config,
+    module_identities: tuple[str, ...],
+    *,
+    verify_packaged_contract: bool = True,
+) -> tuple[OT2DigitalTwinController, ContractSnapshot]:
+    """Register the stable digital-twin surface and return its exact serialized contract."""
+    digital_twin_config = DigitalTwinConfig.from_file(config.digital_twin_config_path)
+    controller = await OT2DigitalTwinController.build(motion_controller, digital_twin_config)
+    controller.set_modules(module_identities)
+    device_information = DeviceInformationProvider(controller, __version__, contract_id="")
+    features = [
+        device_information,
+        DeckConfigurationProvider(controller),
+        RobotStateProvider(controller),
+        DigitalTwinMotionController(controller),
+        DigitalTwinPipetteController(controller),
+        DigitalTwinTipController(controller),
+        DigitalTwinLiquidHandlingController(controller),
+    ]
+    for feature in features:
+        app.register(feature)
+    schema_bytes = (
+        files("unitelabs.opentrons_ot2").joinpath("contracts").joinpath("ot2_dt_config.schema.json").read_bytes()
+    )
+    contract = build_contract_snapshot(
+        features,
+        config_schema_version=DT_CONFIG_SCHEMA_VERSION,
+        config_schema_bytes=schema_bytes,
+    )
+    if verify_packaged_contract:
+        expected_resource = files("unitelabs.opentrons_ot2").joinpath("contracts").joinpath("ot2_dt_contract.json")
+        expected = ContractSnapshot.from_mapping(json.loads(expected_resource.read_text(encoding="utf-8")))
+        if contract != expected:
+            msg = (
+                f"Runtime digital-twin contract {contract.contract_id} differs from the packaged "
+                f"contract {expected.contract_id}; regenerate and review the contract artifact."
+            )
+            raise RuntimeError(msg)
+    device_information.set_contract_id(contract.contract_id)
+    log.info(
+        "Digital-twin contract %s with configuration %s",
+        contract.contract_id,
+        digital_twin_config.config_id,
+    )
+    return controller, contract
 
 
 async def create_app(config: OpentronsOt2Config) -> collections.abc.AsyncGenerator[Connector, None]:
@@ -124,6 +189,7 @@ async def create_app(config: OpentronsOt2Config) -> collections.abc.AsyncGenerat
     app.register(PipetteFeature(motion_controller))
     app.register(CalibrationFeature(motion_controller))
 
+    module_identities: list[str] = []
     if not config.use_simulator:
         module_ports = scan_module_ports()
         module_controllers = []
@@ -132,23 +198,29 @@ async def create_app(config: OpentronsOt2Config) -> collections.abc.AsyncGenerat
             hs = await HeaterShakerController.build(port=module_ports["heater_shaker"])
             app.register(HeaterShakerFeature(hs))
             module_controllers.append(hs)
+            module_identities.append(f"HEATER_SHAKER@{module_ports['heater_shaker']}")
 
         if "thermocycler" in module_ports:
             tc = await ThermocyclerController.build(port=module_ports["thermocycler"])
             app.register(ThermocyclerFeature(tc))
             module_controllers.append(tc)
+            module_identities.append(f"THERMOCYCLER@{module_ports['thermocycler']}")
 
         if "temperature" in module_ports:
             temp = await TemperatureModuleController.build(port=module_ports["temperature"])
             app.register(TemperatureModuleFeature(temp))
             module_controllers.append(temp)
+            module_identities.append(f"TEMPERATURE@{module_ports['temperature']}")
 
         if "magnetic" in module_ports:
             mag = await MagneticModuleController.build(port=module_ports["magnetic"])
             app.register(MagneticModuleFeature(mag))
             module_controllers.append(mag)
+            module_identities.append(f"MAGNETIC@{module_ports['magnetic']}")
     else:
         module_controllers = []
+
+    await _register_digital_twin_features(app, motion_controller, config, tuple(module_identities))
 
     log.info(
         "SiLA server listening on %s:%d",
@@ -307,7 +379,16 @@ async def _create_app_with_robot_server(
         ModuleType.MAGNETIC: (MagneticModuleController, MagneticModuleFeature),
     }
 
+    module_identities = []
+    seen_module_types = set()
     for module in shared_hardware.attached_modules:
+        if module.MODULE_TYPE in seen_module_types:
+            msg = (
+                f"Multiple attached {module.MODULE_TYPE.name} modules are ambiguous because this connector "
+                "does not yet expose serial-routed module features"
+            )
+            raise RuntimeError(msg)
+        seen_module_types.add(module.MODULE_TYPE)
         factory = module_factories.get(module.MODULE_TYPE)
         if factory is None:
             log.info("Skipping unsupported module type %s", module.MODULE_TYPE.name)
@@ -315,6 +396,14 @@ async def _create_app_with_robot_server(
         controller_cls, feature_cls = factory
         connector.register(feature_cls(controller_cls.from_module(module)))
         log.info("Registered SiLA feature for module %s", module.MODULE_TYPE.name)
+        module_identities.append(module.MODULE_TYPE.name)
+
+    await _register_digital_twin_features(
+        connector,
+        motion_controller,
+        config,
+        tuple(module_identities),
+    )
 
     log.info(
         "SiLA server listening on %s:%d",

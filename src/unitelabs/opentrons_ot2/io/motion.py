@@ -15,6 +15,7 @@ import ctypes
 import logging
 import math
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 # Import Opentrons driver components
 from opentrons.config.robot_configs import load_ot2
@@ -22,10 +23,14 @@ from opentrons.hardware_control import HardwareControlAPI
 from opentrons.drivers.smoothie_drivers.driver_3_0 import SmoothieDriver
 from opentrons.drivers.smoothie_drivers.constants import AXES
 from opentrons.drivers.smoothie_drivers.errors import SmoothieAlarm, SmoothieError
-from opentrons.drivers.rpi_drivers.gpio import GPIOCharDev
 from opentrons.drivers.rpi_drivers.gpio_simulator import SimulatingGPIOCharDev
 
 from .hardware_proxy import _TimedLock
+
+if TYPE_CHECKING:
+    from opentrons.drivers.rpi_drivers.gpio import GPIOCharDev
+else:
+    GPIOCharDev = Any
 
 # ALSA constants and library handle for play_tone.
 # libasound.so.2 is only present on the OT-2 (Linux/ARM); None on other platforms.
@@ -231,7 +236,9 @@ class OT2MotionController:
             )
         else:
             log.info("Building OT2MotionController for real hardware on %s", port)
-            gpio = GPIOCharDev("gpiochip0")
+            from opentrons.drivers.rpi_drivers.gpio import GPIOCharDev as RealGPIOCharDev
+
+            gpio = RealGPIOCharDev("gpiochip0")
             gpio.config_by_board_rev()
             await gpio.setup()
             log.info("GPIO: %s", type(gpio).__name__)
@@ -340,6 +347,11 @@ class OT2MotionController:
     def axis_bounds(self) -> dict[str, float]:
         """Software travel limit (max mm) per axis. Min is always 0.0."""
         return self._driver.axis_bounds
+
+    @property
+    def has_hardware_api(self) -> bool:
+        """Return whether high-level Opentrons hardware operations are available."""
+        return self._hw_api is not None
 
     @property
     def board_revision(self) -> str:
@@ -517,6 +529,95 @@ class OT2MotionController:
             current = self.position
             target = {axis: current.get(axis, 0) + distance_mm}
             await self._driver.move(target=target, speed=speed_mm_s)
+
+    async def pick_up_tip_at(
+        self,
+        *,
+        mount: str,
+        x: float,
+        y: float,
+        pickup_axis_position: float,
+        safe_axis_position: float,
+        tip_length: float,
+        actuation_mode: str,
+        presses: int,
+        increment: float,
+    ) -> None:
+        """Execute an atomic move, tip pickup, and retract sequence under one hardware lock."""
+        mount_name = mount.upper()
+        mount_axis = "Z" if mount_name == "LEFT" else "A"
+        async with self._lock:
+            try:
+                await self._driver.move(target={mount_axis: safe_axis_position})
+                await self._driver.move(target={"X": x, "Y": y})
+                await self._driver.move(target={mount_axis: pickup_axis_position})
+                if actuation_mode == "HARDWARE_API":
+                    if self._hw_api is None:
+                        msg = (
+                            "tip_actuation_mode is HARDWARE_API but this connector runtime has no shared "
+                            "HardwareControlAPI; enable the shared runtime or use a hardware-validated "
+                            "CALIBRATED_PLUNGER profile"
+                        )
+                        raise RuntimeError(msg)
+                    from opentrons.types import Mount
+
+                    await self._hw_api.pick_up_tip(
+                        Mount.LEFT if mount_name == "LEFT" else Mount.RIGHT,
+                        tip_length=tip_length,
+                        presses=presses,
+                        increment=increment,
+                    )
+                else:
+                    # The first press is the move to pickup_axis_position above.
+                    # Additional presses retract slightly and then press incrementally deeper.
+                    for press_index in range(1, presses):
+                        retract = pickup_axis_position + max(increment, 1.0)
+                        deeper = pickup_axis_position - press_index * increment
+                        await self._driver.move(target={mount_axis: retract})
+                        await self._driver.move(target={mount_axis: deeper})
+                await self._driver.move(target={mount_axis: safe_axis_position})
+            except asyncio.CancelledError:
+                await self._driver.hard_halt()
+                raise
+
+    async def drop_tip_at(
+        self,
+        *,
+        mount: str,
+        x: float,
+        y: float,
+        release_axis_position: float,
+        safe_axis_position: float,
+        actuation_mode: str,
+        drop_tip_plunger_position: float,
+    ) -> None:
+        """Execute an atomic move, tip release, plunger recovery, and retract sequence."""
+        mount_name = mount.upper()
+        mount_axis = "Z" if mount_name == "LEFT" else "A"
+        plunger_axis = "B" if mount_name == "LEFT" else "C"
+        async with self._lock:
+            try:
+                await self._driver.move(target={mount_axis: safe_axis_position})
+                await self._driver.move(target={"X": x, "Y": y})
+                await self._driver.move(target={mount_axis: release_axis_position})
+                if actuation_mode == "HARDWARE_API":
+                    if self._hw_api is None:
+                        msg = (
+                            "tip_actuation_mode is HARDWARE_API but this connector runtime has no shared "
+                            "HardwareControlAPI; enable the shared runtime or use a hardware-validated "
+                            "CALIBRATED_PLUNGER profile"
+                        )
+                        raise RuntimeError(msg)
+                    from opentrons.types import Mount
+
+                    await self._hw_api.drop_tip(Mount.LEFT if mount_name == "LEFT" else Mount.RIGHT, home_after=True)
+                else:
+                    await self._driver.move(target={plunger_axis: drop_tip_plunger_position})
+                    await self._home_plunger(plunger_axis)
+                await self._driver.move(target={mount_axis: safe_axis_position})
+            except asyncio.CancelledError:
+                await self._driver.hard_halt()
+                raise
 
     # ============ Motor Current ============
 

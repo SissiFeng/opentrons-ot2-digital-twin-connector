@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "task_id": "Matterix-OT2-LiquidHandler-v1",
+  "robot_asset_name": "ot2",
+  "asset_path": "assets/opentrons_ot2.usd",
+  "asset_sha256": "REPLACE_WITH_VERIFIED_ASSET_SHA256",
+  "action_factory_module": "matterix_ot2_actions",
+  "deck_frame": "ot2_deck",
+  "axis_joints": {
+    "X": "gantry_x",
+    "Y": "gantry_y",
+    "Z": "left_mount_z",
+    "A": "right_mount_z",
+    "B": "left_plunger",
+    "C": "right_plunger"
+  },
+  "contract_id": "2092afe298601f3a946b0746cc17f52bd9ea504d19e9d34a4c6f3eb4cf24899c",
+  "config_id": "21fa14265654292897585809dd8da67f009324a3ecc53464935117179bbc2e80",
+  "calibration_id": "UNCONFIRMED"
+}

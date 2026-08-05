@@ -60,7 +60,7 @@ async def test_serialized_fdl_matches_packaged_contract():
         resource = files("unitelabs.opentrons_ot2").joinpath("contracts").joinpath("ot2_dt_contract.json")
         expected = ContractSnapshot.from_mapping(json.loads(resource.read_text(encoding="utf-8")))
         assert actual == expected
-        assert actual.contract_id == "22c798367023c912694c128f7b9341d365d3d4ea0203159f136699f9fda4942e"
+        assert actual.contract_id == "2092afe298601f3a946b0746cc17f52bd9ea504d19e9d34a4c6f3eb4cf24899c"
         await connector.start()
         started = True
         assert connector.sila_server.protobuf is not None

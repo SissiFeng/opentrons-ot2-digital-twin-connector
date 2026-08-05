@@ -37,6 +37,7 @@ _MICROLITRES_PER_SECOND = constraints.Unit(
 Millimetres = typing.Annotated[float, _MILLIMETRE]
 MovementSpeed = typing.Annotated[float, constraints.MinimalInclusive(0.0), _MILLIMETRES_PER_SECOND]
 LiquidVolume = typing.Annotated[float, constraints.MinimalExclusive(0.0), _MICROLITRE]
+TrackedLiquidVolume = typing.Annotated[float, constraints.MinimalInclusive(0.0), _MICROLITRE]
 LiquidFlowRate = typing.Annotated[float, constraints.MinimalExclusive(0.0), _MICROLITRES_PER_SECOND]
 
 
@@ -182,7 +183,7 @@ class MountState:
     homed: bool
     tip_presence: TipPresence
     tip_evidence: StateEvidence
-    liquid_volume: typing.Annotated[float, constraints.MinimalInclusive(0.0), _MICROLITRE]
+    liquid_volume: TrackedLiquidVolume
     liquid_volume_known: bool
 
 

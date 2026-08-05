@@ -20,6 +20,7 @@ from ._digital_twin_types import (
     Mount,
     OperationPhase,
     OperationProgress,
+    TrackedLiquidVolume,
     report_progress,
 )
 from .device_information import CATEGORY, ORIGINATOR
@@ -57,7 +58,7 @@ class DigitalTwinLiquidHandlingController(sila.Feature):
         *,
         status: sila.Status,
         intermediate: sila.Intermediate[OperationProgress],
-    ) -> LiquidVolume:
+    ) -> TrackedLiquidVolume:
         """Aspirate a validated volume using the configured pipette calibration."""
         report_progress(status, intermediate, 0.0, OperationPhase.STARTING, "Starting aspiration.")
         try:
@@ -83,7 +84,7 @@ class DigitalTwinLiquidHandlingController(sila.Feature):
         *,
         status: sila.Status,
         intermediate: sila.Intermediate[OperationProgress],
-    ) -> LiquidVolume:
+    ) -> TrackedLiquidVolume:
         """Dispense a validated volume using the configured pipette calibration."""
         report_progress(status, intermediate, 0.0, OperationPhase.STARTING, "Starting dispense.")
         try:

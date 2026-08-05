@@ -1,7 +1,7 @@
 {
   "config_schema_sha256": "0bfecb4175032951ad484b1ce3c6290028472d17988891c50599bfa4035cc195",
   "config_schema_version": "1.0",
-  "contract_id": "22c798367023c912694c128f7b9341d365d3d4ea0203159f136699f9fda4942e",
+  "contract_id": "2092afe298601f3a946b0746cc17f52bd9ea504d19e9d34a4c6f3eb4cf24899c",
   "features": [
     {
       "category": "robots",
@@ -78,7 +78,7 @@
         "PipetteNotAttachedError",
         "TipStateError"
       ],
-      "fdl_sha256": "99890415a3e4e0c144c42680b5ea0233072d6fd10dff9999d397f5e9d0e81434",
+      "fdl_sha256": "8d9e524b83858ec92915cd1286251440fd06c82475a3e5ca3f37d82b21b06ab7",
       "fqi": "io.github.sissifeng/robots/LiquidHandlingController/v1",
       "identifier": "LiquidHandlingController",
       "originator": "io.github.sissifeng",

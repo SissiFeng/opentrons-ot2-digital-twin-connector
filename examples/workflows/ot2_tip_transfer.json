@@ -1,0 +1,99 @@
+{
+  "workflow_name": "OT-2 contract-pinned tip transfer",
+  "version": "1.0",
+  "phases": [
+    {
+      "phase_name": "setup",
+      "steps": [
+        {
+          "step_id": "setup_labware",
+          "action": "robot.load_labware",
+          "params": {
+            "labware": "source_plate"
+          },
+          "description": "Declarative setup only; the connector uses its pinned configuration."
+        }
+      ]
+    },
+    {
+      "phase_name": "transfer",
+      "steps": [
+        {
+          "step_id": "home",
+          "action": "robot.home",
+          "params": {},
+          "description": "Home the OT-2."
+        },
+        {
+          "step_id": "reconcile_empty",
+          "action": "robot.reconcile_tip",
+          "params": {
+            "pipette": "p300_multi_gen2",
+            "present": false
+          },
+          "description": "Record operator inspection before the first pickup."
+        },
+        {
+          "step_id": "pick_tip",
+          "action": "robot.pick_up_tip",
+          "params": {
+            "pipette": "p300_multi_gen2",
+            "labware": "tips_300",
+            "well": "A1"
+          },
+          "description": "Atomic move, pickup, and retract owned by the connector."
+        },
+        {
+          "step_id": "move_source",
+          "action": "robot.move_to_well",
+          "params": {
+            "pipette": "p300_multi_gen2",
+            "labware": "source_plate",
+            "well": "A1",
+            "height": "WORKING",
+            "reference": "TIP"
+          },
+          "description": "Move to the configured source well."
+        },
+        {
+          "step_id": "aspirate",
+          "action": "robot.aspirate",
+          "params": {
+            "pipette": "p300_multi_gen2",
+            "volume_ul": 50.0
+          },
+          "description": "Use the configured calibration and default flow rate."
+        },
+        {
+          "step_id": "move_destination",
+          "action": "robot.move_to_well",
+          "params": {
+            "pipette": "p300_multi_gen2",
+            "labware": "destination_plate",
+            "well": "A1",
+            "height": "WORKING",
+            "reference": "TIP"
+          },
+          "description": "Move to the configured destination well."
+        },
+        {
+          "step_id": "dispense",
+          "action": "robot.dispense",
+          "params": {
+            "pipette": "p300_multi_gen2",
+            "volume_ul": 50.0
+          },
+          "description": "Dispense the tracked volume."
+        },
+        {
+          "step_id": "drop_tip",
+          "action": "robot.drop_tip",
+          "params": {
+            "pipette": "p300_multi_gen2"
+          },
+          "description": "Use the connector-owned configured trash location."
+        }
+      ]
+    }
+  ]
+}

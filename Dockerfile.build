@@ -1,0 +1,299 @@
+# Stage 1: Compile grpcio on Debian Stretch (glibc 2.24).
+# OT-2 has glibc 2.25. Buster has glibc 2.28 — too new.
+# Stretch (glibc 2.24) is the oldest ARM image with a working apt archive.
+# Python 3.10 requires OpenSSL 1.1.1, but Stretch ships 1.1.0 — compile both from source.
+# Each RUN is a separate cache layer: apt → OpenSSL → Python → grpcio.
+FROM arm32v7/debian:stretch-slim AS grpc-builder
+
+# Stretch is EOL — redirect to archive; Release file is expired so disable valid-until check.
+RUN echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/10no-check-valid-until && \
+    sed -i 's/deb.debian.org/archive.debian.org/g' /etc/apt/sources.list && \
+    sed -i 's|security.debian.org/debian-security|archive.debian.org/debian-security|g' /etc/apt/sources.list && \
+    sed -i '/stretch-updates/d' /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        zlib1g-dev \
+        libffi-dev \
+        libsqlite3-dev \
+        libbz2-dev \
+        liblzma-dev \
+        libgdbm-dev \
+        wget \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+# These -dev packages must be present before Python compiles below, or CPython silently
+# skips building the corresponding stdlib module (no build failure, just a module gap
+# that surfaces later as a ModuleNotFoundError wherever something imports it -- this is
+# exactly how the _sqlite3 gap was found, via a real crash on hardware). Confirmed via
+# CPython's own build summary ("necessary bits ... were not found") which of the
+# skippable optional modules were missing; added the ones with unconditional-import
+# risk here (bz2/lzma/dbm/gdbm -- opentrons_shared_data bundles a lot of data, and any
+# of these could plausibly be hit loading it). Left out as genuinely inapplicable to a
+# headless daemon: _tkinter, _curses/_curses_panel, readline. Left out _uuid: Python's
+# uuid module has a documented pure-Python fallback when this C extension is missing,
+# unlike the others which are unconditional imports that raise if absent.
+
+# OpenSSL 1.1.1 from source — stretch-backports doesn't reliably override configure detection
+RUN wget -q https://www.openssl.org/source/openssl-1.1.1w.tar.gz && \
+    tar xzf openssl-1.1.1w.tar.gz && \
+    cd openssl-1.1.1w && \
+    ./Configure linux-armv4 --prefix=/usr/local/ssl --openssldir=/usr/local/ssl shared zlib no-asm && \
+    make -j$(nproc) && \
+    make install_sw && \
+    echo /usr/local/ssl/lib > /etc/ld.so.conf.d/ssl.conf && ldconfig && \
+    cd .. && rm -rf openssl-1.1.1w*
+
+# Python 3.10 pointed explicitly at our OpenSSL 1.1.1 install
+RUN wget -q https://www.python.org/ftp/python/3.10.4/Python-3.10.4.tgz && \
+    tar xzf Python-3.10.4.tgz && \
+    cd Python-3.10.4 && \
+    ./configure --enable-shared --prefix=/usr/local \
+        --with-openssl=/usr/local/ssl \
+        --with-openssl-rpath=auto && \
+    make -j$(nproc) && \
+    make install && \
+    ldconfig && \
+    cd .. && rm -rf Python-3.10.4*
+
+# setuptools 80+ removed pkg_resources from the wheel; pin to a version that still includes it.
+RUN /usr/local/bin/pip3 install --upgrade pip wheel "setuptools<80"
+# grpcio 1.46.x bundles abseil-cpp ~20211102 which requires only GCC 5+.
+# grpcio 1.70+ bundles a newer abseil that requires GCC 7+, unavailable on Stretch.
+# Use setup.py bdist_wheel directly (not pip) to avoid pip's subprocess isolation
+# which hides pkg_resources even when setuptools is installed.
+# _PYTHON_HOST_PLATFORM: force linux_armv7l tag — uname -m returns aarch64 in arm32v7 on ARM64.
+RUN wget -q -O /tmp/grpcio-1.46.3.tar.gz \
+        https://files.pythonhosted.org/packages/61/dd/d8eda79197a1275e06621850775c7bbf34a141ff92553754dde4e87d7551/grpcio-1.46.3.tar.gz && \
+    tar xzf /tmp/grpcio-1.46.3.tar.gz -C /tmp/ && \
+    cd /tmp/grpcio-1.46.3 && \
+    _PYTHON_HOST_PLATFORM=linux-armv7l \
+    /usr/local/bin/python3 setup.py bdist_wheel --dist-dir /grpc-output/ && \
+    rm -rf /tmp/grpcio-1.46.3 /tmp/grpcio-1.46.3.tar.gz
+
+
+# Stage 2: Compile gpiod Python bindings for armv7l.
+# The official libgpiod 1.x Python bindings (PascalCase API: Chip, Line, etc.) are not
+# on PyPI — the PyPI "gpiod" package is an unrelated ctypes wrapper with a different API.
+# Build from libgpiod 1.6.3 source (matching the version on the OT-2) on Debian Stretch
+# (glibc 2.24). The resulting .so links against libgpiod.so.2 which is present on the OT-2.
+FROM grpc-builder AS gpiod-builder
+# The tarball includes a pre-generated configure script — ./autogen.sh is not needed.
+# bindings/python/ has no setup.py (uses autotools); we write a minimal one that compiles
+# gpiodmodule.c against the installed libgpiod C library.
+RUN wget -q https://mirrors.edge.kernel.org/pub/software/libs/libgpiod/libgpiod-1.6.3.tar.gz && \
+    tar xzf libgpiod-1.6.3.tar.gz && \
+    cd libgpiod-1.6.3 && \
+    ./configure --prefix=/usr/local --enable-shared --disable-static && \
+    make -j$(nproc) && \
+    make install && \
+    echo /usr/local/lib > /etc/ld.so.conf.d/local.conf && ldconfig && \
+    cd bindings/python && \
+    printf '%s\n' \
+        'from setuptools import setup, Extension' \
+        'setup(name="gpiod", version="1.6.3", ext_modules=[Extension(' \
+        '    "gpiod", sources=["gpiodmodule.c"],' \
+        '    libraries=["gpiod"], library_dirs=["/usr/local/lib"],' \
+        '    include_dirs=["/usr/local/include"])])' \
+        > setup.py && \
+    _PYTHON_HOST_PLATFORM=linux-armv7l \
+    /usr/local/bin/pip3 wheel . --no-deps --wheel-dir=/gpiod-output/ && \
+    cd / && rm -rf libgpiod-1.6.3*
+
+
+# Stage 3: Compile numpy for armv7l on Debian Stretch (glibc 2.24).
+# Must use the same Stretch base as grpc-builder: building on Bookworm (glibc 2.36)
+# produces a wheel that requires GLIBC_2.34+, which the OT-2 (glibc 2.25) does not have.
+# Reuses the custom Python 3.10 + OpenSSL already built in Stage 1.
+# Compiled without BLAS/LAPACK (NPY_BLAS_ORDER="" NPY_LAPACK_ORDER="") — no libopenblas
+# runtime dep, which is also absent on the OT-2. Only array ops are needed for robot control.
+FROM grpc-builder AS numpy-builder
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gfortran && \
+    rm -rf /var/lib/apt/lists/*
+# _PYTHON_HOST_PLATFORM: force armv7l tag — uname -m returns aarch64 in arm32v7 on ARM64.
+RUN _PYTHON_HOST_PLATFORM=linux-armv7l \
+    NPY_BLAS_ORDER="" NPY_LAPACK_ORDER="" \
+    /usr/local/bin/pip3 wheel "numpy>=1.20,<1.25" --no-deps --wheel-dir=/numpy-output/
+
+
+# Stage 3: Build our package and download remaining deps
+FROM arm32v7/python:3.10-slim-bookworm AS builder
+
+WORKDIR /build
+# git: needed below to pip-download robot_server and its monorepo siblings from source
+# (not on PyPI); slim-bookworm doesn't include it by default. build-essential (g++):
+# needed to compile greenlet, a transitive dep SQLAlchemy pulls in further below.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git build-essential && \
+    rm -rf /var/lib/apt/lists/*
+RUN pip install --upgrade pip wheel build uv
+
+COPY pyproject.toml README.md ./
+COPY src/ src/
+COPY config/ config/
+
+# Dependency resolution strategy:
+#
+# uv pip compile resolves the full dep tree from pyproject.toml. Python version
+# markers in pyproject.toml select opentrons==8.8.1 and numpy<1.25 for py310.
+#
+# Packages excluded from pip download (provided some other way below):
+#   - grpcio==1.46.3: no pre-built armv7l wheel on PyPI for glibc 2.24; compiled
+#     in grpcio-builder stage. Overridden here so uv captures six>=1.5.2 as a
+#     transitive dep (latest grpcio dropped six from its declared deps).
+#   - numpy: compiled without BLAS/LAPACK; libopenblas is absent on the OT-2
+#   - gpiod: opentrons undeclared dep; PyPI "gpiod" is an unrelated ctypes wrapper;
+#     official libgpiod 1.x bindings built from source in gpiod-builder stage
+#   - pydantic, opentrons, uvicorn, wsproto: bundled below instead, as part of a
+#     single internally-consistent set with robot_server (see next RUN) -- see
+#     that comment for why.
+RUN python -m build --wheel && \
+    mkdir -p /output && \
+    cp dist/*.whl /output/ && \
+    printf 'grpcio==1.46.3\n' > /tmp/overrides.txt && \
+    uv pip compile --python-version 3.10 --override /tmp/overrides.txt pyproject.toml > /tmp/resolved.txt && \
+    grep -v '^numpy\|^grpcio\|^gpiod\|^pydantic\|^opentrons\|^uvicorn\|^wsproto\|^python-dotenv' /tmp/resolved.txt > /tmp/resolved_filtered.txt && \
+    pip download --no-deps -d /output/ \
+        --platform manylinux_2_17_armv7l --platform linux_armv7l \
+        --python-version 310 --implementation cp --abi cp310 \
+        -r /tmp/resolved_filtered.txt
+
+COPY --from=numpy-builder /numpy-output/numpy-*.whl /output/
+COPY --from=grpc-builder /grpc-output/grpcio-*.whl /output/
+COPY --from=gpiod-builder /gpiod-output/gpiod-*.whl /output/
+
+# robot_server is not on PyPI -- only in the Opentrons monorepo on GitHub. Different
+# physical OT-2 units have drifted to different system fastapi/pydantic versions
+# (confirmed: one robot has fastapi 0.100.0/pydantic 2.11.7, another has the much
+# older fastapi 0.99.1/pydantic 1.10.12 -- real pydantic v1, incompatible with this
+# project's own pydantic-v2-only code in one process). Bundling one fixed,
+# internally-consistent set ourselves -- instead of relying on whatever a given
+# robot's system happens to have -- removes that variability entirely. This mirrors
+# .github/workflows/test.yml's own robot_server integration tests exactly, which
+# already prove this combination works together.
+#
+# opentrons/opentrons_shared_data/opentrons_hardware are reinstalled from git (not
+# just the PyPI opentrons==8.8.1 wheel above) because the PyPI build omits symbols
+# robot_server imports (opentrons_shared_data.util, opentrons_hardware itself, etc).
+# pip wheel (not pip download): pip download saves a VCS source as a raw .zip source
+# tree, not an actual .whl -- confirmed directly -- so the later `pip install
+# /wheels/*.whl` would silently skip it. pip wheel builds and saves a real wheel, same
+# tool already used for gpiod/numpy above. No --platform/--abi flags: these are
+# pure-Python VCS sources pip must build, and this container already IS the target
+# arch/Python version, so it builds correctly without them.
+RUN pip wheel --no-deps --wheel-dir=/output/ \
+        "opentrons @ git+https://github.com/Opentrons/opentrons.git@v8.8.1#subdirectory=api" \
+        "opentrons_shared_data @ git+https://github.com/Opentrons/opentrons.git@v8.8.1#subdirectory=shared-data" \
+        "opentrons_hardware @ git+https://github.com/Opentrons/opentrons.git@v8.8.1#subdirectory=hardware" \
+        "robot_server @ git+https://github.com/Opentrons/opentrons.git@v8.8.1#subdirectory=robot-server" \
+        "server_utils @ git+https://github.com/Opentrons/opentrons.git@v8.8.1#subdirectory=server-utils"
+
+# robot_server's own non-monorepo runtime deps, pinned to the exact versions
+# .github/workflows/test.yml already proves compatible with it. --only-binary=:all:
+# (required alongside --platform/--python-version/--abi unless --no-deps is used) is
+# fine here -- unlike aiohttp/sqlalchemy below, transitive deps of this set (starlette,
+# anyio, click, h11, etc.) are expected to have ordinary prebuilt wheels.
+RUN pip download -d /output/ \
+        --platform manylinux_2_17_armv7l --platform linux_armv7l \
+        --python-version 310 --implementation cp --abi cp310 --only-binary=:all: \
+        "fastapi==0.100.0" \
+        "pydantic==2.11.7" \
+        "pydantic-settings==2.4.0" \
+        "python-dotenv==1.0.1" \
+        "python-multipart==0.0.6" \
+        "uvicorn==0.27.0.post1" \
+        "wsproto==1.2.0"
+
+# paho-mqtt==1.6.1 only ever published an sdist, no wheel -- --only-binary=:all: above
+# would reject it. It's pure Python with no deps of its own, so build it directly with
+# no platform restriction (same reasoning as the git packages above). pip wheel, not
+# pip download -- see comment above the git packages for why.
+RUN pip wheel --no-deps --wheel-dir=/output/ "paho-mqtt==1.6.1"
+
+# aiohttp and sqlalchemy==1.4.51 have no prebuilt armv7l wheels for cp310 (checked
+# directly against piwheels.org, the actual ARM-wheel repo the Raspberry-Pi-like OT-2
+# ecosystem would use -- confirmed empirically, not assumed). Both have official,
+# documented pure-Python build modes, which sidestep needing a cross-compile toolchain
+# entirely since a pure-Python wheel has no architecture dependency:
+#   - aiohttp: AIOHTTP_NO_EXTENSIONS=1 (aiohttp's own setup.py / release notes)
+#   - SQLAlchemy: DISABLE_SQLALCHEMY_CEXT=1 (documented since 0.8.6/0.9.4)
+# pip wheel, not pip download -- see comment above the git packages for why.
+RUN AIOHTTP_NO_EXTENSIONS=1 DISABLE_SQLALCHEMY_CEXT=1 \
+    pip wheel --no-binary aiohttp --no-binary sqlalchemy --wheel-dir=/output/ \
+        "aiohttp" \
+        "sqlalchemy==1.4.51"
+
+
+# Stage 5: Build single self-contained connector binary using PyInstaller.
+# Based on gpiod-builder: Stretch + Python 3.10 + libgpiod.so.2 at /usr/local/lib.
+# Bundles every Python package, every C extension, and libgpiod.so.2.
+# The only external dep at runtime is glibc (OS ABI; built on Stretch glibc 2.24 → OT-2 glibc 2.25).
+FROM gpiod-builder AS pyinstaller-builder
+
+# All wheels (pure-Python + C extensions) come from the builder stage's /output.
+COPY --from=builder /output/ /wheels/
+
+# Install all wheels into the Stretch Python 3.10 environment.
+# --no-deps: every required package -- including robot_server and its full matched
+# dependency set -- is already in /wheels/; no PyPI/git lookups needed here.
+RUN /usr/local/bin/pip3 install --no-deps /wheels/*.whl
+
+# Build the PyInstaller bootloader from source for armv7l on Stretch (glibc 2.24).
+# PyInstaller ships pre-built bootloaders for x86/x86_64/aarch64 only — not armv7l.
+# The bootloader is injected into the output binary and must match the target glibc.
+# build-essential and zlib1g-dev are already present from the grpc-builder stage.
+RUN /usr/local/bin/pip3 install pyinstaller-hooks-contrib && \
+    wget -q https://github.com/pyinstaller/pyinstaller/archive/refs/tags/v5.13.2.tar.gz && \
+    tar xzf v5.13.2.tar.gz && \
+    cd pyinstaller-5.13.2/bootloader && \
+    /usr/local/bin/python3 ./waf all && \
+    cd ../.. && \
+    /usr/local/bin/pip3 install ./pyinstaller-5.13.2/ && \
+    rm -rf pyinstaller-5.13.2 v5.13.2.tar.gz
+
+# Smoke-test imports before PyInstaller runs — fails fast if any package is missing.
+RUN /usr/local/bin/python3 -c "import grpc, gpiod, opentrons, numpy, robot_server, unitelabs.opentrons_ot2; print('imports OK: grpc=%s numpy=%s' % (grpc.__version__, numpy.__version__))"
+
+# Build the connector binary.
+# Entry point: /usr/local/bin/connector — the console_scripts shim written by pip when
+# unitelabs-cdk is installed.
+# --add-binary bundles libgpiod.so.2 (compiled on Stretch in gpiod-builder) so the gpiod
+# extension resolves it from inside the bundle via PyInstaller's LD_LIBRARY_PATH, not the system.
+# libstdc++.so.6, libgcc_s.so.1, and libpython3.10.so.1.0 are auto-collected via ldd.
+RUN _PYTHON_HOST_PLATFORM=linux-armv7l \
+    /usr/local/bin/pyinstaller \
+        --onefile \
+        --name connector \
+        --collect-all opentrons \
+        --collect-all opentrons_shared_data \
+        --collect-all unitelabs \
+        --collect-all zeroconf \
+        --collect-all robot_server \
+        --collect-all fastapi \
+        --hidden-import grpc._cython.cygrpc \
+        --add-binary '/usr/local/lib/libgpiod.so.2:.' \
+        --distpath /exe-output/ \
+        /usr/local/bin/connector
+
+# Smoke-test the frozen binary itself — catches missing hidden imports and data files.
+RUN /exe-output/connector --help
+
+# Real smoke test: actually start the app with with_robot_server=true (simulator mode)
+# and confirm it reaches a running state instead of crashing during create_app(). This
+# is the exact path that broke before (robot_server/pydantic/fastapi) and that --help
+# alone never exercises. Fully testable in CI now that robot_server no longer depends
+# on anything present on a real robot's system Python.
+COPY config/ot2_config.json /tmp/ot2_config.json
+RUN /usr/local/bin/python3 -c "\
+import json; \
+cfg = json.load(open('/tmp/ot2_config.json')); \
+cfg['use_simulator'] = True; \
+cfg['with_robot_server'] = True; \
+cfg['robot_server_tcp_port'] = 8080; \
+cfg['sila_server']['port'] = 0; \
+json.dump(cfg, open('/tmp/smoke_config.json', 'w'))" && \
+    (timeout 20 /exe-output/connector start --app unitelabs.opentrons_ot2:create_app --config-path /tmp/smoke_config.json > /tmp/smoke.log 2>&1 &) && \
+    sleep 15 && \
+    cat /tmp/smoke.log && \
+    grep -q "SiLA server listening" /tmp/smoke.log

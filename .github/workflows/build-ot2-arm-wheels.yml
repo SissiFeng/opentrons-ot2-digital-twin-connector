@@ -9,6 +9,8 @@ on:
       - 'Dockerfile.build'
       - 'Dockerfile.build.py312'
       - 'pyproject.toml'
+      - 'config/ot2_config.json'
+      - 'config/ot2_dt_config.json'
       - 'src/**'
 
 jobs:
@@ -41,6 +43,7 @@ jobs:
           docker cp $id:/exe-output/connector dist_connector/connector
           docker rm $id
           cp config/ot2_config.json dist_connector/ot2_config.json
+          cp config/ot2_dt_config.json dist_connector/ot2_dt_config.json
           ls -la dist_connector/
 
       - name: Smoke-test connector binary (py310)
@@ -85,6 +88,7 @@ jobs:
           docker cp $id:/exe-output/connector dist_connector_py312/connector
           docker rm $id
           cp config/ot2_config.json dist_connector_py312/ot2_config.json
+          cp config/ot2_dt_config.json dist_connector_py312/ot2_dt_config.json
           ls -la dist_connector_py312/
 
       - name: Smoke-test connector binary (py312)

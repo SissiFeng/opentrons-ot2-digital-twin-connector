@@ -11,8 +11,8 @@
     "uuid": "f036fcea-1756-4f9e-835b-20336f4baf58",
     "name": "Opentrons OT-2",
     "type": "LiquidHandler",
-    "description": "SiLA2 connector for Opentrons OT-2 motion and GPIO control",
-    "version": "0.1",
+    "description": "Independent SiLA2 and digital-twin connector for Opentrons OT-2 robots",
+    "version": "0.1.0",
     "vendor_url": "https://opentrons.com/",
     "default_lifetime": 3600.0
   },

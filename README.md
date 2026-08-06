@@ -1,306 +1,219 @@
-# Opentrons OT-2
+# Sissi Feng OT-2 Digital-Twin Connector
 
-A SiLA2 connector for the Opentrons OT-2 liquid handling robot that also replaces the
-standard Opentrons robot-server HTTP API. Both servers share a single hardware driver
-instance so they cannot conflict over the serial port.
+An independent SiLA 2 connector for Opentrons OT-2 robots, external
+`robot.*` workflows, and Matterix digital-twin integration.
 
-## Architecture
+This repository has its own Git history and package identity:
+`sissifeng-opentrons-ot2-dt-connector`. It does not inherit a remote or commit
+graph from the source snapshot. See
+[REPOSITORY_PROVENANCE.md](REPOSITORY_PROVENANCE.md) for source provenance.
 
-This project runs two servers in the same process when deployed to a real OT-2:
+## What is implemented
 
-| Server | Protocol | Port | Purpose |
-|--------|----------|------|---------|
-| SiLA2 connector | gRPC | 50051 | Lab automation clients (SiLA Browser, UniteLabs platform) |
-| Opentrons robot-server | HTTP REST | 31950 | Opentrons App, Ground Control, any REST client |
+The connector exposes two deliberately separated surfaces:
 
-Both servers are backed by one shared `HardwareControlAPI` wrapped in `HardwareProxy`
-(an `asyncio.Lock` around every serial command). This prevents interleaved writes to
-`/dev/ttyAMA0` and avoids the port-already-open error that would occur if two processes
-each tried to initialise the Smoothie.
+| Surface | Owner | Purpose |
+|---|---|---|
+| High-level digital-twin features | OT-2 connector | Versioned deck/config identity, state, motion, atomic tip lifecycle, pipette inventory, and volume operations |
+| Diagnostic/raw features | OT-2 connector | Existing motion, GPIO, calibration, and module diagnostics |
+| `robot.*` Bridge | Orchestrator adapter | Preserves external workflow JSON, resolves the pinned SiLA contract, gates execution, and writes audit JSONL |
+| Matterix boundary | Digital twin | Produces OT-2 semantic action configs, installs complete workflow sequences through `StateMachine.set_action_sequence`, and compares predicted versus connector state |
 
-The standard `opentrons-robot-server` systemd service is disabled on deployment. Our
-`sila2-connector` service owns the hardware and starts the HTTP API in-process via
-uvicorn on a Unix domain socket (`/run/aiohttp.sock`). nginx on the OT-2 proxies
-external TCP port 31950 to that socket — so the HTTP API is reachable at
-`http://<robot-ip>:31950` exactly as it would be with the stock `opentrons-robot-server`
-service.
+The high-level SiLA features are:
 
-**Key source files:**
+- `DeviceInformationProvider` 1.0
+- `DeckConfigurationProvider` 1.0
+- `RobotStateProvider` 1.0
+- `MotionController` 2.0
+- `PipetteController` 1.0
+- `TipController` 1.0
+- `LiquidHandlingController` 1.0
 
-- `src/unitelabs/opentrons_ot2/__init__.py` — `create_app()` entry point and
-  `_create_app_with_robot_server()` (the in-process HTTP server startup)
-- `src/unitelabs/opentrons_ot2/io/hardware_proxy.py` — `HardwareProxy` shared-lock wrapper
-- `tests/test_create_app_with_robot_server.py` — unit tests for the startup wiring (mocked)
-- `tests/integration/http_api/` — end-to-end HTTP API tests against a live robot
+The serialized FDL, endpoint modes, parameter identifiers, defined errors, and
+configuration schema are pinned by
+[`ot2_dt_contract.json`](src/unitelabs/opentrons_ot2/contracts/ot2_dt_contract.json).
+The current contract ID is:
 
-## Getting Started
-
-For a general introduction to connector development with the UniteLabs CDK, see the [connector development documentation](https://docs.unitelabs.io/connector-development).
-
-### Prerequisites
-
-Ensure that [uv](https://docs.astral.sh/uv/) is installed on your system. You can install it with:
-
-```sh
-pipx install uv
+```text
+2092afe298601f3a946b0746cc17f52bd9ea504d19e9d34a4c6f3eb4cf24899c
 ```
 
-### Installation
+Connector startup fails if the runtime FDL differs from this artifact.
 
-#### Create a Virtual Environment
+## Safety and authority boundaries
 
-It is highly recommended to use a virtual environment to manage the dependencies for your connector project. This keeps the dependencies for different connectors isolated from each other. Use the following command to create a virtual environment:
+- Atomic tip operations remain connector-owned under one hardware lock:
+  move, pickup or release, retract, then update state.
+- The OT-2 has no Flex-style physical tip-presence sensor. Successful tip
+  operations therefore report `SOFTWARE_TRACKED`; failures and cancellations
+  become `UNKNOWN` / `UNRECONCILED`.
+- Side effects are never retried automatically by the Bridge.
+- The Bridge performs read-only identity, calibration, pipette, and state
+  preflight before any side effect.
+- Every Bridge side effect records the request hash plus pre/post connector
+  state in append-only JSONL.
+- Simulation is explicit. Hardware initialization errors never silently switch
+  to simulation.
+- The checked example configuration is intentionally
+  `calibration_confirmed=false`; it is not authorization for physical motion.
 
-```sh
-uv venv
-```
+## Configuration
 
-Activate the virtual environment:
+There are three distinct configuration files:
 
-- On **Windows**:
+| File | Purpose |
+|---|---|
+| [`config/ot2_config.json`](config/ot2_config.json) | Connector process, SiLA server, hardware/simulator mode |
+| [`config/ot2_dt_config.json`](config/ot2_dt_config.json) | Versioned deck, labware, pipette, calibration, trash, and durable state path |
+| [`config/ot2_simulator_config.json`](config/ot2_simulator_config.json) | Explicit local process simulator |
+| [`config/ot2_dt_simulator_config.json`](config/ot2_dt_simulator_config.json) | Simulator-only confirmed calibration and `/tmp` state |
+| [`config/matterix_ot2.json`](config/matterix_ot2.json) | Matterix task, USD asset hash, joint mapping, action factory, and connector identity pins |
 
-  ```sh
-  .\venv\Scripts\activate.bat
-  ```
+Before physical operation, create a local reviewed digital-twin configuration
+with measured geometry and definition hashes, set a real `calibration_id`, and
+set `calibration_confirmed=true` only after physical inspection. Do not commit
+secrets; process-level secrets belong in environment variables or deployment
+configuration.
 
-- On **macOS**/**Linux**:
-
-  ```sh
-  source venv/bin/activate
-  ```
-
-If you are on a Windows machine, you may additionally wish to set the `UNITELABS_CDK_APP` environment variable to the connector's entry point. This can be done by running the following command:
-
-```sh
-set UNITELABS_CDK_APP=unitelabs.opentrons_ot2:create_app
-```
-
-Setting this environment variable will allow you to run varous CLI commands without providing `--app unitelabs.opentrons_ot2:create_app` every time.
-
-#### Install Required Dependencies
-
-Install the necessary Python packages into your active virtual environment:
-
-```sh
-uv pip install unitelabs-opentrons-ot2 \
-  --index-url https://gitlab.com/api/v4/groups/1009252/-/packages/pypi/simple
-```
-
-If you are working with a private connector repository, authenticate to allow access:
+Validate the exact connector contract:
 
 ```sh
-uv pip install unitelabs-opentrons-ot2 \
-  --index-url https://<username>:<password>@gitlab.com/api/v4/groups/1009252/-/packages/pypi/simple
+uv run ot2-contract-check \
+  --config config/ot2_dt_config.json \
+  --expect src/unitelabs/opentrons_ot2/contracts/ot2_dt_contract.json
 ```
 
-#### Configure the Connector
+## Local development and simulation
 
-To get information about the configuration values for the connector simply run:
-
-- On **Windows**:
-
-  ```sh
-  config show --app unitelabs.opentrons_ot2:create_app
-  ```
-
-- On **macOS**/**Linux**:
-
-  ```sh
-  config show
-  ```
-
-To create a configuration file for our connector we run:
-
-- On **Windows**:
-
-  ```sh
-  config create --app unitelabs.opentrons_ot2:create_app
-  ```
-
-- On **macOS**/**Linux**:
-
-  ```sh
-  config create
-  ```
-
-Used as such this command will create a `config.json` in the current working directory. If you prefer to use yaml for your config file or would like to save the file to a different location, simply add the `--path` argument:
-
-- On **Windows**:
-
-  ```sh
-  config create --app unitelabs.opentrons_ot2:create_app  --path <path to config>
-  ```
-
-- On **macOS**/**Linux**:
-
-  ```sh
-  config create --path <path to config>
-  ```
-
-The file that is created will be populated with default configuration values that you may now edit.
-
-Note: The `cloud_server_endpoint` values are only necessary if you want to use the connector with the UniteLabs platform.
-
-#### Verify the Installation
-
-After installation, you can verify that everything works by starting the connector using the CLI tool included in the dependencies:
-
-Note: This must be done in the activated environment setup in Step 1.
-
-```sh
-connector start --app unitelabs.opentrons_ot2:create_app -vvv
-```
-
-If you decided to create your configuration file at a non-default location, you can specify it with the `--config-path` or `-cfg` argument:
-
-```sh
-connector start --app unitelabs.opentrons_ot2:create_app -cfg <path to config> -vvv
-```
-
-In this way one can have multiple configurations for the same connector.
-
-## Deploying to the OT-2
-
-The OT-2 runs a custom embedded Linux with glibc 2.25 and Python 3.10. Standard PyPI
-wheels for C-extension packages are built against much newer glibc versions and will
-fail at import with `GLIBC_X.XX not found`. The two affected packages are:
-
-| Package | PyPI wheel requires | Fix |
-|---------|-------------------|-----|
-| `grpcio` | glibc 2.32+ | Compiled from source on Debian Stretch (glibc 2.24 cap) |
-| `rpds-py <0.30` | glibc 2.34+ | Upgrade to ≥0.30, which ships a `manylinux_2_17_armv7l` wheel (glibc 2.17+) |
-
-The connector is deployed to the robot as a single self-contained binary (built with
-PyInstaller) — no venv, no `pip`, no Python installation required on the robot at all.
-Everything the connector needs, including `opentrons` and a compatible `pydantic`, is
-bundled into that one binary; there is no venv-based deployment path.
-
-Deployment is three scripted steps — see **[`scripts/README.md`](scripts/README.md)** for
-the full command reference:
-
-1. **Set up Tailscale** (one-time, per physical robot) — `scripts/setup_tailscale.sh`
-2. **Install the connector** (every deploy — downloads the binary, deploys it, installs
-   the systemd service) — `scripts/setup_ot2.sh <host>`
-3. **Verify everything is up** — `scripts/verify_ot2.sh <host>`
-
-`scripts/setup_ot2.sh` triggers/downloads from the **Build OT-2 ARM Wheels** GitHub
-Actions workflow (`.github/workflows/build-ot2-arm-wheels.yml`), which runs on a native
-`ubuntu-24.04-arm` runner (so arm32v7 containers execute without QEMU emulation) and
-compiles `grpcio` from source on Debian Buster to keep glibc symbol requirements within
-what the OT-2 supports.
-
-## Usage
-
-To interact with the running connector, we recommend using the [SiLA Browser](https://gitlab.com/unitelabs/sila2/sila-browser).
-
-### Encryption
-
-To secure communication between the connector and its clients, you can enable TLS encryption. Start by installing the optional `cryptography` package for generating TLS certificates:
-
-```sh
-uv pip install cryptography
-```
-
-To generate a pair of public and private keys, use the following command:
-
-```sh
-certificate generate
-```
-
-Without any arguments this command uses the default config location to get the connector's UUID and host name, required to generate TLS certificates. It will prompt you as to whether or not you want to update your config file to enable TLS encryption on your connector. This prompt can be suppressed with the use of the `--non-interactive` or `-y` flag, which will update the config file with paths to the locally created files without prompting, or with `--embed` or `-e` flag to write the file contents into the config file directly.
-
-You can adjust your config file's host to reflect the machine's hostname, or set it to `localhost` if the connector should only be accessible locally.
-
-If your config file was created at a non-default path, you can provide it with the `--config-path` or `-cfg` option:
-
-```sh
-certificate generate -cfg <path to config>
-```
-
-By default the generate command creates the `cert.pem` and `key.pem` files in your current working directory. You can customize the output directory with the `--target` argument.
-
-If you choose not to update your config file with the paths to your certificates using `--non-interactive` or `-y` or to have the file contents saved directly in your config file with `--embed` or `-e` flag, you will have to modify the config file yourself to set the following values under `sila_server`:
-
-- `certificate_chain` - the path to the `cert.pem` file
-- `private_key` - the path to the `key.pem` file
-- `tls` - a boolean that toggles on/off TLS encryption for the SiLA server
-
-With your updated config file you can once again run:
-
-```sh
-connector start --app unitelabs.opentrons_ot2:create_app -vvv
-```
-
-> **Important:** Never share the `key.pem` file with anyone. Only the `cert.pem` is required for clients to connect to encrypted servers.
-
-## Contribute
-
-We welcome contributions to improve our connectors. Follow the steps below to set up your development environment.
-
-### Development Environment
-
-We use [uv][] for Python packaging.
-
-#### Set Up the Environment
-
-Install and configure `uv`:
-
-```sh
-pipx install uv
-```
-
-Note: requires `uv>=0.6.8`.
-
-#### Install the Package
-
-Clone the repository:
-
-```sh
-git clone https://github.com/AccelerationConsortium/sila2-ot2.git
-```
-
-Set up the development environment and start the connector:
+Prerequisite: [uv](https://docs.astral.sh/uv/).
 
 ```sh
 uv sync --all-extras
-uv run connector start -vvv
+uv run connector start \
+  --app unitelabs.opentrons_ot2:create_app \
+  --config-path config/ot2_simulator_config.json -vvv
 ```
 
-Note: By default, uv will sync all dependencies with every call to `uv run CMD`. To prevent this use `uv run --frozen CMD` or set the environment variable `UV_FROZEN=true`.
+The checked simulator config uses `use_simulator=true`,
+`with_robot_server=false`, and the relative digital-twin config path.
 
-#### Install pre-commit Hooks
-
-Set up `pre-commit` hooks to ensure code quality:
+Run validation:
 
 ```sh
-uv run pre-commit install
+uv run ruff format --check src tests
+uv run ruff check src tests
+uv run pytest -q
+uv build
 ```
 
-#### Running Tests
+The real local gRPC integration test exercises:
 
-To run the test suite:
+```text
+preflight
+  -> Home
+  -> ReconcileTip
+  -> atomic PickUpTip
+  -> Aspirate
+  -> Dispense to 0 µL
+  -> atomic DropTip
+  -> post-state and audit verification
+```
+
+This is simulator evidence, not physical hardware evidence.
+
+## External workflow Bridge
+
+[`ot2_tip_transfer.json`](examples/workflows/ot2_tip_transfer.json) demonstrates
+the unchanged phase-based orchestrator shape. Setup steps such as
+`robot.load_labware` remain declarative: the connector's pinned configuration
+is authoritative. Non-robot steps remain owned by the mixed-instrument
+orchestrator.
+
+The Bridge:
+
+1. parses phases and parallel-thread metadata without renaming actions;
+2. resolves pipette aliases and symbolic labware against the pinned config;
+3. derives gRPC package, service, endpoint mode, and parameter identifiers from
+   the packaged contract;
+4. verifies connector/config/calibration/serial/pipette identity;
+5. executes once and records pre/post state.
+
+See `unitelabs.opentrons_ot2.bridge` for the adapter, transport, executor, and
+audit models.
+
+## Matterix status
+
+The connector includes the correct workflow-level integration boundary:
+
+```text
+external workflow
+  -> contract-resolved OT-2 commands
+  -> OT-2 semantic action configs
+  -> installed OT-2 Matterix action factory
+  -> matterix_sm.StateMachine.set_action_sequence(...)
+```
+
+The current Matterix source inventory does not contain an OT-2 USD asset, an
+OT-2 gym task, or OT-2 compositional actions. The repository therefore does
+not substitute the existing Franka/beaker task or claim a real OT-2 Matterix
+run. `config/matterix_ot2.json` intentionally contains an asset-hash
+placeholder and a required external action-factory module.
+
+Check the environment without launching Omniverse:
 
 ```sh
-uv run pytest
+uv run ot2-matterix-preflight --json
+uv run ot2-matterix-preflight --strict
 ```
 
-To run tests with a specific version of python, e.g. Python 3.12:
+Strict readiness requires Linux, Isaac Lab, `matterix_sm`, `matterix_tasks`,
+Gymnasium, confirmed physical calibration, a hash-pinned OT-2 USD asset, and an
+installed module exposing `build_ot2_action_cfg(action)`.
+
+The import-safe planner and shadow comparison are fully unit-tested on macOS.
+Real Isaac Lab execution must be validated on a supported Linux Matterix
+machine once the OT-2 asset/action extension exists.
+
+## Dual-server OT-2 deployment
+
+With `with_robot_server=true`, one process exposes:
+
+| Server | Default endpoint | Purpose |
+|---|---|---|
+| SiLA 2 gRPC | `:50051` | Connector and Bridge clients |
+| Opentrons robot-server HTTP | `:31950` via nginx/UDS | Opentrons App and REST clients |
+
+Both share one `HardwareControlAPI` and lock. The stock robot-server systemd
+unit is disabled so only this process owns the serial/GPIO hardware.
+
+The deployment artifact contains:
+
+- the self-contained ARM connector binary;
+- `ot2_config.json`;
+- `ot2_dt_config.json`.
+
+For a reviewed physical configuration, place
+`config/ot2_dt_config.local.json` locally before deployment. It is copied to
+`/var/lib/opentrons-ot2-dt/config.json`; durable state remains at
+`/var/lib/opentrons-ot2-dt/state.json`.
 
 ```sh
-uv run --python 3.12 --all-extras pytest
+sh scripts/setup_ot2.sh <robot-host>
+sh scripts/verify_ot2.sh <robot-host>
 ```
 
-#### Dev-Mode
+The default release source is
+`sissifeng/opentrons-ot2-digital-twin-connector`. Override it with
+`OT2_CONNECTOR_GITHUB_REPOSITORY=owner/repository` if the remote uses another
+name. See [scripts/README.md](scripts/README.md) for details.
 
-To improve the development experience, we recommend running the connector in developer mode. This will automatically reload the connector whenever changes to the source code are saved.
+## Evidence levels
 
-```sh
-uv run connector dev --app unitelabs.opentrons_ot2:create_app
-```
-
-## Contact
-
-If you found a bug, please use the [issue tracker][issue-tracker].
-
-[issue-tracker]: https://github.com/AccelerationConsortium/sila2-ot2/issues
-[uv]: https://docs.astral.sh/uv/
+- Unit tests: contract, validation, state, adapter, audit, Matterix planning,
+  and shadow semantics.
+- Local gRPC simulator: actual serialized protobuf and observable-command
+  flow.
+- CI/build: platform matrix and frozen ARM artifact checks after a remote is
+  configured.
+- Not yet established: physical OT-2 HITL and real Matterix/IsaacLab OT-2
+  execution.

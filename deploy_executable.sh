@@ -11,6 +11,7 @@
 #                  (default: dist_connector). Must contain:
 #                    - connector  (the PyInstaller binary)
 #                    - ot2_config.json
+#                    - ot2_dt_config.json
 #
 # Normally called by scripts/setup_ot2.sh, which downloads this directory from
 # the latest "ot2-latest" GitHub Release first.
@@ -25,6 +26,14 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [ ! -f "$SCRIPT_DIR/$CONNECTOR_DIR/connector" ]; then
     echo "ERROR: connector binary not found in '$CONNECTOR_DIR/'."
     echo "Download the ot2-connector-arm artifact from GitHub Actions and unzip into dist_connector/."
+    exit 1
+fi
+if [ ! -f "$SCRIPT_DIR/$CONNECTOR_DIR/ot2_config.json" ]; then
+    echo "ERROR: connector process config not found in '$CONNECTOR_DIR/'."
+    exit 1
+fi
+if [ ! -f "$SCRIPT_DIR/$CONNECTOR_DIR/ot2_dt_config.json" ]; then
+    echo "ERROR: digital-twin config not found in '$CONNECTOR_DIR/'."
     exit 1
 fi
 
@@ -48,6 +57,15 @@ else
     CONFIG_FILE="$SCRIPT_DIR/$CONNECTOR_DIR/ot2_config.json"
 fi
 scp -O "$CONFIG_FILE" "root@$HOST:$INSTALL_PATH/config.json"
+if [ -f "$SCRIPT_DIR/config/ot2_dt_config.local.json" ]; then
+    DT_CONFIG_FILE="$SCRIPT_DIR/config/ot2_dt_config.local.json"
+    echo "Digital-twin config: config/ot2_dt_config.local.json (local reviewed override)"
+else
+    DT_CONFIG_FILE="$SCRIPT_DIR/$CONNECTOR_DIR/ot2_dt_config.json"
+    echo "WARNING: deploying checked example digital-twin config; physical operations remain calibration-gated."
+fi
+ssh "root@$HOST" "mkdir -p /var/lib/opentrons-ot2-dt"
+scp -O "$DT_CONFIG_FILE" "root@$HOST:/var/lib/opentrons-ot2-dt/config.json"
 ssh "root@$HOST" "chmod +x $INSTALL_PATH/connector"
 
 echo ""

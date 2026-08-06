@@ -5,14 +5,14 @@
 # incompatible build is never pushed (the OT-2 generation determines which of the two
 # binary variants applies -- see Dockerfile.build vs Dockerfile.build.py312).
 # Downloads from the rolling "ot2-latest" GitHub Release (published by
-# .github/workflows/build-ot2-arm-wheels.yml on every push to main) via plain curl --
-# no gh CLI or auth token required.
+# .github/workflows/build-ot2-arm-wheels.yml on every push to main). Authenticated
+# GitHub CLI supports private repositories; public releases fall back to curl.
 #
 # Usage: ./scripts/setup_ot2.sh <host>
 set -e
 
 HOST="${1:?Usage: $0 <host>}"
-REPO="AccelerationConsortium/opentrons-ot2"
+REPO="${OT2_CONNECTOR_GITHUB_REPOSITORY:-sissifeng/opentrons-ot2-digital-twin-connector}"
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "=== Checking robot compatibility: $HOST ==="
@@ -39,8 +39,14 @@ echo "=== Downloading connector binary from latest main build ==="
 rm -rf "$SCRIPT_DIR/dist_connector"
 mkdir -p "$SCRIPT_DIR/dist_connector"
 TARBALL="/tmp/${ARTIFACT}.tar.gz"
-if ! curl -sL --fail "https://github.com/$REPO/releases/download/ot2-latest/${ARTIFACT}.tar.gz" -o "$TARBALL"; then
+if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+    if ! gh release download ot2-latest --repo "$REPO" --pattern "${ARTIFACT}.tar.gz" --output "$TARBALL" --clobber; then
+        echo "ERROR: could not download the authenticated release artifact from $REPO."
+        exit 1
+    fi
+elif ! curl -sL --fail "https://github.com/$REPO/releases/download/ot2-latest/${ARTIFACT}.tar.gz" -o "$TARBALL"; then
     echo "ERROR: could not download $ARTIFACT.tar.gz from the 'ot2-latest' release."
+    echo "For a private repository, install/authenticate gh and run this script again."
     echo "Has the 'Build OT-2 ARM Wheels' workflow finished on main yet? Check:"
     echo "  https://github.com/$REPO/releases/tag/ot2-latest"
     exit 1

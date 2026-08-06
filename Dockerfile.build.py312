@@ -210,12 +210,14 @@ RUN /exe-output/connector --help
 # and confirm it reaches a running state instead of crashing during create_app(). Fully
 # testable in CI now that robot_server no longer depends on a real robot's system Python.
 COPY config/ot2_config.json /tmp/ot2_config.json
+COPY config/ot2_dt_config.json /tmp/ot2_dt_config.json
 RUN python3 -c "\
 import json; \
 cfg = json.load(open('/tmp/ot2_config.json')); \
 cfg['use_simulator'] = True; \
 cfg['with_robot_server'] = True; \
 cfg['robot_server_tcp_port'] = 8080; \
+cfg['digital_twin_config_path'] = '/tmp/ot2_dt_config.json'; \
 cfg['sila_server']['port'] = 0; \
 json.dump(cfg, open('/tmp/smoke_config.json', 'w'))" && \
     (timeout 20 /exe-output/connector start --app unitelabs.opentrons_ot2:create_app --config-path /tmp/smoke_config.json > /tmp/smoke.log 2>&1 &) && \

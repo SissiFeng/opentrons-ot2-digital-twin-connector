@@ -27,4 +27,4 @@ repos:
     rev: v0.45.0
     hooks:
       - id: markdownlint-fix
-        args: ["--disable=MD013", "--disable=MD033", "--disable=MD024", "--disable=MD041", "--ignore=.gitlab/**/*.md"]
+        args: ["--disable=MD013", "--disable=MD033", "--disable=MD024", "--disable=MD041"]

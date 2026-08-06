@@ -15,6 +15,10 @@ of which already ship by default on macOS, Linux, and Windows 10+. No GitHub CLI
 auth token, or Python needed — `setup_ot2.sh` downloads the binary as a `.tar.gz` from a
 public release asset, which doesn't require authentication.
 
+For a private connector repository, install and authenticate GitHub CLI
+(`gh auth login`). `setup_ot2.sh` uses `gh release download` when available,
+and falls back to unauthenticated `curl` for public repositories.
+
 ## The 3-step flow
 
 ### 1. Set up Tailscale — `setup_tailscale.sh` (one-time, per physical robot)
@@ -39,12 +43,24 @@ This is the script you run to ship the latest `main` to a robot. It:
    continue if there's no matching build for that OT-2 generation — so an incompatible
    binary is never pushed. (The check itself doesn't require Python on the robot for our
    app — it's just how the two OT-2 generations/binary variants are told apart.)
-2. Downloads the matching connector binary via `curl` from the rolling `ot2-latest`
-   GitHub Release (published automatically on every push to `main`).
-3. Calls `../deploy_executable.sh` (copies the binary + config to `/var/sila2_ot2`) and
+2. Downloads the matching connector binary from the rolling `ot2-latest`
+   GitHub Release (authenticated `gh` for private repositories, otherwise
+   `curl`; published automatically on every push to `main`).
+3. Calls `../deploy_executable.sh` (copies the binary + process config to
+   `/var/sila2_ot2`, and the digital-twin config to
+   `/var/lib/opentrons-ot2-dt/config.json`) and
    `install_connector_service.sh` (writes/enables/restarts the `sila2-connector`
    systemd service).
 4. Calls `verify_ot2.sh`.
+
+The artifact's `ot2_dt_config.json` is deliberately unconfirmed. To deploy
+reviewed physical geometry and calibration, create the untracked local file
+`config/ot2_dt_config.local.json`; deployment selects it automatically. The
+durable state file is not overwritten.
+
+The release repository defaults to
+`sissifeng/opentrons-ot2-digital-twin-connector`. Set
+`OT2_CONNECTOR_GITHUB_REPOSITORY=owner/repository` to use another remote.
 
 ### 3. Verify everything is up — `verify_ot2.sh`
 

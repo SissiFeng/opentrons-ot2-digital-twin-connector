@@ -1,0 +1,85 @@
+{
+  "schema_version": "1.0",
+  "config_revision": "simulator-only",
+  "deck_definition": "opentrons_ot2_standard/3",
+  "calibration_id": "SIMULATOR-ONLY",
+  "calibration_confirmed": true,
+  "deck_bounds": {
+    "minimum": {"x": 0.0, "y": 0.0, "z": -20.0},
+    "maximum": {"x": 420.0, "y": 360.0, "z": 200.0}
+  },
+  "deck_offset": {"x": 0.0, "y": 0.0, "z": 0.0},
+  "labware": [
+    {
+      "labware_id": "tips_300",
+      "definition_uri": "opentrons/opentrons_96_tiprack_300ul/1",
+      "definition_hash": "SIMULATOR_ONLY",
+      "slot": "1",
+      "origin": {"x": 0.0, "y": 0.0, "z": 0.0},
+      "grid": {
+        "rows": ["A", "B", "C", "D", "E", "F", "G", "H"],
+        "columns": 12,
+        "first_well": {"x": 14.38, "y": 11.24, "z": 0.0},
+        "row_spacing": 9.0,
+        "column_spacing": 9.0,
+        "approach_height": 10.0,
+        "working_height": -7.0
+      }
+    },
+    {
+      "labware_id": "source_plate",
+      "definition_uri": "opentrons/corning_96_wellplate_360ul_flat/3",
+      "definition_hash": "SIMULATOR_ONLY",
+      "slot": "2",
+      "origin": {"x": 132.5, "y": 0.0, "z": 0.0},
+      "grid": {
+        "rows": ["A", "B", "C", "D", "E", "F", "G", "H"],
+        "columns": 12,
+        "first_well": {"x": 14.38, "y": 11.24, "z": 0.0},
+        "row_spacing": 9.0,
+        "column_spacing": 9.0,
+        "approach_height": 10.0,
+        "working_height": 1.0
+      }
+    },
+    {
+      "labware_id": "destination_plate",
+      "definition_uri": "opentrons/corning_96_wellplate_360ul_flat/3",
+      "definition_hash": "SIMULATOR_ONLY",
+      "slot": "3",
+      "origin": {"x": 265.0, "y": 0.0, "z": 0.0},
+      "grid": {
+        "rows": ["A", "B", "C", "D", "E", "F", "G", "H"],
+        "columns": 12,
+        "first_well": {"x": 14.38, "y": 11.24, "z": 0.0},
+        "row_spacing": 9.0,
+        "column_spacing": 9.0,
+        "approach_height": 10.0,
+        "working_height": 1.0
+      }
+    }
+  ],
+  "instruments": [
+    {
+      "mount": "RIGHT",
+      "aliases": ["p300_multi_gen2", "right_pipette"],
+      "expected_model": "p300_multi_v2.1",
+      "name": "p300_multi_gen2",
+      "channels": 8,
+      "minimum_volume": 20.0,
+      "maximum_volume": 300.0,
+      "microlitres_per_millimetre": 18.5,
+      "default_aspirate_flow_rate": 94.0,
+      "default_dispense_flow_rate": 94.0,
+      "nozzle_deck_axis_position": 50.0,
+      "safe_travel_height": 140.0,
+      "tip_length": 51.7,
+      "tip_actuation_mode": "CALIBRATED_PLUNGER",
+      "pickup_presses": 1,
+      "pickup_increment": 0.0,
+      "drop_tip_plunger_position": -37.0
+    }
+  ],
+  "trash": {"x": 347.84, "y": 351.5, "z": 30.0},
+  "state_path": "/tmp/sissifeng-opentrons-ot2-dt-state.json"
+}

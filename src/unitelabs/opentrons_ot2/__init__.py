@@ -93,7 +93,7 @@ class OpentronsOt2Config(ConnectorBaseConfig):
         default_factory=lambda: SiLAServerConfig(
             name="Opentrons OT-2",
             type="LiquidHandler",
-            description="SiLA2 connector for Opentrons OT-2 motion and GPIO control",
+            description="Independent SiLA2 and digital-twin connector for Opentrons OT-2 robots",
             version=str(__version__),
             vendor_url="https://opentrons.com/",
         )

@@ -28,6 +28,19 @@ def test_config_is_schema_valid_and_hash_stable():
     assert config.resolve_well("tips_300", "A1", use_approach=False).z == -7.0
 
 
+def test_deployment_digital_twin_config_matches_checked_example():
+    source = DigitalTwinConfig.from_file("config/ot2_dt_config.json")
+    deployment = DigitalTwinConfig.from_file("dist_connector/ot2_dt_config.json")
+    assert deployment.config_id == source.config_id
+
+
+def test_explicit_simulator_config_uses_confirmed_sim_only_state():
+    simulator = DigitalTwinConfig.from_file("config/ot2_dt_simulator_config.json")
+    assert simulator.calibration_confirmed is True
+    assert simulator.calibration_id == "SIMULATOR-ONLY"
+    assert simulator.state_path.startswith("/tmp/")
+
+
 def test_config_rejects_unknown_fields():
     value = json.loads(Path("config/ot2_dt_config.json").read_text(encoding="utf-8"))
     value["unreviewed_override"] = True

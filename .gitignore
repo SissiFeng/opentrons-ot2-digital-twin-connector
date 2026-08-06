@@ -236,6 +236,7 @@ config.yml
 
 # Local config overrides (real hostnames/credentials, never commit)
 config/ot2_config.local.json
+config/ot2_dt_config.local.json
 
 # Local planning notes
 plan/

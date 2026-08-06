@@ -1,35 +1,23 @@
 {
   "sila_server": {
-    "hostname": "0.0.0.0",
-    "port": 50051,
+    "hostname": "127.0.0.1",
+    "port": 50052,
     "tls": false,
     "require_client_auth": false,
     "root_certificates": null,
     "certificate_chain": null,
     "private_key": null,
     "options": {},
-    "uuid": "f036fcea-1756-4f9e-835b-20336f4baf58",
-    "name": "Opentrons OT-2",
+    "uuid": "c9628684-0eb7-4ee7-b5c4-1b948697fd52",
+    "name": "Opentrons OT-2 Simulator",
     "type": "LiquidHandler",
-    "description": "Independent SiLA2 and digital-twin connector for Opentrons OT-2 robots",
+    "description": "Explicit simulator for the independent OT-2 digital-twin connector",
     "version": "0.1.0",
     "vendor_url": "https://opentrons.com/",
     "default_lifetime": 3600.0
   },
-  "cloud_server_endpoint": {
-    "hostname": "localhost",
-    "port": 50000,
-    "tls": true,
-    "root_certificates": null,
-    "certificate_chain": null,
-    "private_key": null,
-    "reconnect_delay": 10000.0,
-    "options": {}
-  },
-  "discovery": {
-    "ip_version": "ipv4",
-    "network_interfaces": []
-  },
+  "cloud_server_endpoint": null,
+  "discovery": null,
   "logging": {
     "version": 1,
     "disable_existing_loggers": false,
@@ -50,10 +38,9 @@
       "handlers": ["stderr"]
     }
   },
-  "use_simulator": false,
+  "use_simulator": true,
   "serial_port": "/dev/ttyAMA0",
-  "with_robot_server": true,
-  "robot_server_uds": "/run/aiohttp.sock",
+  "with_robot_server": false,
   "lock_timeout_s": null,
-  "digital_twin_config_path": "/var/lib/opentrons-ot2-dt/config.json"
+  "digital_twin_config_path": "config/ot2_dt_simulator_config.json"
 }

@@ -33,6 +33,10 @@ dependencies=[
     "wsproto",
 ]
 
+[project.urls]
+Repository = "https://github.com/sissifeng/opentrons-ot2-digital-twin-connector"
+Issues = "https://github.com/sissifeng/opentrons-ot2-digital-twin-connector/issues"
+
 [project.scripts]
 ot2-contract-check = "unitelabs.opentrons_ot2.digital_twin.contract_cli:main"
 ot2-matterix-preflight = "unitelabs.opentrons_ot2.matterix.preflight:main"
@@ -166,17 +170,6 @@ exclude_also = [
     "@typing.overload",
     "if typing.TYPE_CHECKING:",
     "\\.\\.\\.",
-]
-
-[tool.cruft]
-skip = [
-    ".venv/",
-    ".git/",
-    ".ruff_cache/",
-    ".pytest_cache/",
-    ".env",
-    ".uv-cache/",
-    "uv.lock",
 ]
 
 [tool.hatch.build.targets.wheel]

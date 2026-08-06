@@ -7,7 +7,7 @@ import enum
 import hashlib
 import json
 from collections.abc import Mapping
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 
 class EndpointKind(str, enum.Enum):
@@ -109,7 +109,7 @@ class PreflightReport:
     ) -> PreflightReport:
         """Create a UTC-timestamped report."""
         return cls(
-            checked_at=datetime.now(UTC).isoformat(),
+            checked_at=datetime.now(timezone.utc).isoformat(),
             contract_id=contract_id,
             config_id=config_id,
             calibration_id=calibration_id,
@@ -149,7 +149,7 @@ class ExecutionRecord:
     ) -> ExecutionRecord:
         """Create a UTC-timestamped audit record."""
         return cls(
-            recorded_at=datetime.now(UTC).isoformat(),
+            recorded_at=datetime.now(timezone.utc).isoformat(),
             step_id=command.step_id,
             action=command.action,
             request_hash=command.request_hash,

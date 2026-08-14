@@ -225,10 +225,10 @@
         "G12": "pipette_tip_mesh_94",
         "H12": "pipette_tip_mesh_95"
       },
-      "non_tip_child_ids": ["tiprack_mesh"],
+      "non_tip_child_ids": [],
       "expected_child_count": 96,
       "manifest_sha256": "UNVERIFIED",
-      "evidence": "SOURCE_INSPECTED: PR7 authors tiprack_mesh plus pipette_tip_mesh_00..95; accept and pin the composed 97-body manifest before execution"
+      "evidence": "SOURCE_INSPECTED: PR47 79efd967 materializes only pipette_tip_mesh_00..95 as nested children and spawns the static rack separately; accept and pin the 96-tip runtime manifest before execution"
     }
   ],
   "contract_id": "bd710e8b7d66f1f739330945c13b6401450682a0a6a7675c02478cf8f44bbffc",

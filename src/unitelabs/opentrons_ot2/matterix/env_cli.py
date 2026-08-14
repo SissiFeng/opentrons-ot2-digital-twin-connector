@@ -48,10 +48,11 @@ from isaaclab.utils import configclass
 
 try:
     from matterix_assets.robots import OT2_CFG, apply_ot2_joint_alignment
-    from matterix_assets.labware import make_ot2_tip_rack_with_tips_cfg
+    from matterix_assets.labware import OT2_TIP_RACK_CFG, make_ot2_tip_rack_with_tips_cfg
 except ImportError:  # OT-2 asset not installed yet
     OT2_CFG = None
     apply_ot2_joint_alignment = None
+    OT2_TIP_RACK_CFG = None
     make_ot2_tip_rack_with_tips_cfg = None
 
 
@@ -92,7 +93,7 @@ def _aligned_ot2_cfg():
 
 def _tip_rack_cfgs():
     """Place accepted nested tip racks from connector deck coordinates."""
-    if make_ot2_tip_rack_with_tips_cfg is None:
+    if OT2_TIP_RACK_CFG is None or make_ot2_tip_rack_with_tips_cfg is None:
         return {}
     from unitelabs.opentrons_ot2.digital_twin.config import DigitalTwinConfig
     from unitelabs.opentrons_ot2.matterix.asset import OT2MatterixAssetConfig
@@ -116,11 +117,15 @@ def _tip_rack_cfgs():
     result = {}
     for binding in asset.tip_rack_bindings:
         placement = connector.placement(binding.labware_id)
-        cfg = make_ot2_tip_rack_with_tips_cfg()
-        cfg.pos = asset.reference_frame_alignment.deck_point_mm_to_world_m(
+        position = asset.reference_frame_alignment.deck_point_mm_to_world_m(
             (placement.origin.x, placement.origin.y, placement.origin.z)
         )
+        rack_cfg = OT2_TIP_RACK_CFG(pos=position)
+        rack_cfg.rot = world_from_deck.rotation_wxyz
+        cfg = make_ot2_tip_rack_with_tips_cfg()
+        cfg.pos = position
         cfg.rot = world_from_deck.rotation_wxyz
+        result[f"{binding.asset_name}_rack"] = rack_cfg
         result[binding.asset_name] = cfg
     return result
 

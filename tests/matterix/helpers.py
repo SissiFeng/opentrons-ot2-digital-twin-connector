@@ -61,7 +61,7 @@ def verified_tip_binding_mapping() -> dict[str, object]:
         for column in range(1, 13)
         for row_index, row in enumerate("ABCDEFGH")
     }
-    non_tip_child_ids = ["tiprack_mesh"]
+    non_tip_child_ids: list[str] = []
     return {
         "schema_version": "1.0",
         "binding_id": "TEST-TIPS-96",
@@ -74,7 +74,7 @@ def verified_tip_binding_mapping() -> dict[str, object]:
         "non_tip_child_ids": non_tip_child_ids,
         "expected_child_count": 96,
         "manifest_sha256": nested_manifest_sha256("tips", [*child_ids.values(), *non_tip_child_ids]),
-        "evidence": "TEST_ONLY: synthetic rack plus 96-child nested manifest",
+        "evidence": "TEST_ONLY: synthetic 96-tip nested manifest; static rack is a separate object",
     }
 
 

@@ -49,9 +49,9 @@ uv run ot2-joint-alignment build-candidate \
 
 ## P1/P2: nested rigid and individual tip addressing
 
-The source-inspected PR7 composition contains 97 rigid children:
+The source-inspected PR7 layout contains the rack and 96 tip transforms:
 
-- `tiprack_mesh` — the static rack body;
+- `tiprack_mesh` — used by the separately spawned static rack;
 - `pipette_tip_mesh_00` through `pipette_tip_mesh_95` — 96 independently
   addressable tips.
 
@@ -60,18 +60,21 @@ column-major (`A1=00`, `B1=01`, ..., `H12=95`) based on the inspected USD. It
 remains `UNVERIFIED` until the runtime manifest and visible rack orientation
 confirm that well ordering.
 
-A runtime manifest artifact has this strict shape:
+Current PR47 (`79efd967`) filters the layout to the 96 tip identifiers and
+spawns each from `pipette_tip_inst.usda`; the empty rack is a separate static
+scene object and is not part of the nested manifest. A runtime manifest artifact
+has this strict shape:
 
 ```json
 {
   "schema_version": "1.0",
   "asset_name": "tips",
-  "child_ids": ["tiprack_mesh", "pipette_tip_mesh_00"],
+  "child_ids": ["pipette_tip_mesh_00", "pipette_tip_mesh_01"],
   "evidence": "Matterix run ID and exact PR47/PR7 revisions"
 }
 ```
 
-The real artifact must list all 97 child IDs. Order is irrelevant; duplicates,
+The real artifact must list all 96 tip child IDs. Order is irrelevant; duplicates,
 missing IDs, unexpected IDs, wrong asset names, wrong well geometry, mount
 mismatch, and multi-channel mismatch are rejected. A canonical hash includes
 the asset name and sorted complete child list.
@@ -138,7 +141,7 @@ trash target. No action teleports a released tip.
 1. Pin exact Matterix, PR47, PR7, connector, OT-2 USD, and LFS revisions.
 2. Collect and review X/Y/Z/A real and simulation evidence.
 3. Survey and review world/base/deck fiducials.
-4. Enumerate the exact 97-child runtime manifest and visually confirm A1–H12
+4. Enumerate the exact 96-tip runtime manifest and visually confirm A1–H12
    orientation.
 5. Ensure the connector pipette mount/channel count matches the PR47 attachment
    route.

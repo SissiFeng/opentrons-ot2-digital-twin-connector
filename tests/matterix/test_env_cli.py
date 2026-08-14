@@ -62,6 +62,7 @@ def test_env_cli_generate_writes_actions_module(tmp_path: Path, capsys) -> None:
     env_source = (target / "matterix_ot2_env.py").read_text(encoding="utf-8")
     assert "asset.validate_reference_frame_alignment()" in env_source
     assert "asset.validate_tip_rack_bindings(connector)" in env_source
+    assert "OT2_TIP_RACK_CFG(pos=position)" in env_source
     assert "make_ot2_tip_rack_with_tips_cfg" in env_source
     assert '"pick_and_return_tip": _pick_and_return_tip_workflow()' in env_source
     assert "ReturnTipCfg" in env_source

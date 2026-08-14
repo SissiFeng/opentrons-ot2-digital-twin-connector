@@ -19,8 +19,9 @@ and the package uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Explicit world/base/deck rigid transforms, non-collinear fiducial fitting,
   reversible point conversion, and reviewed two-transform candidate generation.
 - Exact OT-2 well-to-nested-child bindings for the PR7 rack composition (96
-  independently selectable tips plus the rack body), canonical manifest hashing,
-  runtime drift rejection, and a non-overwriting acceptance CLI.
+  independently selectable nested tips plus a separately spawned static rack),
+  canonical manifest hashing, runtime drift rejection, and a non-overwriting
+  acceptance CLI.
 - Native OT-2 pipette pickup/return translation: safe vertical, XY, contact,
   explicit selected-child attach/detach, physics release, and retract. The
   generated task includes a visible `pick_and_return_tip` workflow.

@@ -46,14 +46,14 @@ git -C source/matterix_assets/data submodule update --init --remote  # 取 OT-2 
   - tip pickup/return 使用 safe vertical → XY → contact → 指定 nested child attach/detach → retract
 - `matterix/env_cli.py` → `generate` 现在同时写出：
   - `matterix_ot2_actions.py`（`build_ot2_action_cfg`，消费 `TranslatedAction.configs`，joint-space）
-  - `matterix_ot2_env.py`（gym 注册 + OT-2、97-body nested tip rack、`pick_and_return_tip` workflow）
+  - `matterix_ot2_env.py`（gym 注册 + OT-2、独立 static rack、96-tip nested collection、`pick_and_return_tip` workflow）
 - `joint_alignment`、`reference_frame_alignment`、`tip_rack_bindings` 都有严格 schema、候选配置生成与 fail-closed gate。
 - 当前准确测试结果以仓库根目录 `uv run pytest -q` 为准；不再保留旧的 261 项快照。
 
 ## 当前外部边界（2026-08-14）
 
 - PR47 的 nested-rigid 运行时基础已经可消费，但目前 `IsTipAttached` 一次只选择一个 child。
-- PR7 组合经源码检查为 `tiprack_mesh` + `pipette_tip_mesh_00..95`；仍需对 exact composite 做 runtime manifest 验收。
+- PR47 `79efd967` 把 `pipette_tip_mesh_00..95` 作为 96 个 nested children，并把 empty rack 单独实例化；仍需对 exact runtime manifest 验收。
 - 当前 checked connector 配置是 RIGHT 8-channel，而 PR47 source-inspected route 是 LEFT/single-child；代码故意拒绝该不一致。
 - 实机 X/Y/Z/A、world/base/deck fiducial 与 WebRTC 原生 OT-2 取放证据尚未完成，配置保持 `UNVERIFIED`。
 

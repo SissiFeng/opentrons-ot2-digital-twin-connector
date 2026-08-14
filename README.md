@@ -231,10 +231,11 @@ uv run ot2-frame-alignment build-candidate \
   --output <candidate-config.json>
 ```
 
-The PR7 composed rack currently exposes `tiprack_mesh` plus
-`pipette_tip_mesh_00` through `pipette_tip_mesh_95`. The connector stores all
-96 well mappings explicitly; it never derives a child name at runtime. Accept a
-runtime enumeration only when all 97 rigid children match:
+The PR7 layout exposes `pipette_tip_mesh_00` through
+`pipette_tip_mesh_95`; current PR47 materializes those 96 tips as nested
+children and spawns the empty static rack separately. The connector stores all
+96 well mappings explicitly and never derives a child name at runtime. Accept a
+runtime enumeration only when all 96 nested tip children match:
 
 ```sh
 uv run ot2-tip-rack-binding check --strict --json
@@ -305,8 +306,9 @@ attachment validates an eight-channel pipette.
 ### External Matterix integration deliverables
 
 The external branches must provide the exact OT-2 articulation, the PR47
-nested-rigid semantics, the PR7 97-body rack composition, the joint action
-primitive, and the registered gym task. The four physical USD joints are
+nested-rigid semantics, the PR7 rack layout, its separately spawned static rack,
+the 96-tip nested collection, the joint action primitive, and the registered gym
+task. The four physical USD joints are
 `PrismaticJointMiddleBar`, `PrismaticJointPipetteHolder`,
 `PrismaticJointLeftPipette`, and `PrismaticJointRightPipette`. B/C remain liquid
 semantics because the USD does not contain plunger joints.

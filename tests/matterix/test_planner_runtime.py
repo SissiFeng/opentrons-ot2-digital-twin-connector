@@ -24,6 +24,11 @@ from unitelabs.opentrons_ot2.matterix import (
 from unitelabs.opentrons_ot2.matterix.preflight import build_checks, main
 
 from tests.digital_twin.helpers import config_mapping
+from tests.matterix.helpers import (
+    verified_alignment_mapping,
+    verified_frame_alignment_mapping,
+    verified_tip_binding_mapping,
+)
 
 
 class FakeFactory:
@@ -77,21 +82,16 @@ def test_asset_identity_and_hash_are_fail_closed(tmp_path: Path) -> None:
     asset_path = tmp_path / "ot2.usd"
     asset_path.write_bytes(b"usd-test-asset")
     mapping = {
-        "schema_version": "1.0",
+        "schema_version": "3.0",
         "task_id": "Matterix-OT2-LiquidHandler-v1",
         "robot_asset_name": "ot2",
         "asset_path": str(asset_path),
         "asset_sha256": hashlib.sha256(asset_path.read_bytes()).hexdigest(),
         "action_factory_module": "matterix_ot2_actions",
         "deck_frame": "ot2_deck",
-        "axis_joints": {
-            "X": "x",
-            "Y": "y",
-            "Z": "z",
-            "A": "a",
-            "B": "b",
-            "C": "c",
-        },
+        "joint_alignment": verified_alignment_mapping(),
+        "reference_frame_alignment": verified_frame_alignment_mapping(),
+        "tip_rack_bindings": [verified_tip_binding_mapping()],
         "contract_id": plan.contract_id,
         "config_id": connector.config_id,
         "calibration_id": connector.calibration_id,
@@ -109,6 +109,9 @@ def test_checked_example_reports_real_runtime_not_ready() -> None:
     by_name = {check.name: check for check in checks}
     assert by_name["OT-2 connector configuration"].ok is True
     assert by_name["Confirmed physical calibration"].ok is False
+    assert by_name["Verified OT-2 joint alignment"].ok is False
+    assert by_name["Verified world/base/deck alignment"].ok is False
+    assert by_name["Verified individual tip addressing"].ok is False
     assert by_name["Matterix OT-2 USD asset"].ok is False
     assert by_name["matterix_ot2_actions"].ok is False
     assert main(["--strict", "--json"]) == 1

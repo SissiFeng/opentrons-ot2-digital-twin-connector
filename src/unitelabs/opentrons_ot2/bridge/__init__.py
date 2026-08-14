@@ -1,6 +1,15 @@
 """Contract-pinned adapter between external ``robot.*`` workflows and OT-2 SiLA."""
 
 from .adapter import OT2StepError, OT2WorkflowAdapter
+from .arbiter import (
+    ArbiterResult,
+    DivergenceAlert,
+    DryRunFunction,
+    DryRunResult,
+    OT2ExecutionArbiter,
+    RunMode,
+    default_dry_run,
+)
 from .executor import OT2BridgeExecutor, OT2PreflightError
 from .models import (
     EndpointKind,
@@ -16,13 +25,18 @@ from .transport import OT2SiLATransport
 from .workflow import ParsedWorkflow, WorkflowFormatError, parse_workflow
 
 __all__ = [
+    "ArbiterResult",
     "ContractRegistry",
+    "DivergenceAlert",
+    "DryRunFunction",
+    "DryRunResult",
     "EndpointBinding",
     "EndpointKind",
     "ExecutionMode",
     "ExecutionRecord",
     "OT2BridgeExecutor",
     "OT2Command",
+    "OT2ExecutionArbiter",
     "OT2PreflightError",
     "OT2SiLATransport",
     "OT2StepError",
@@ -30,7 +44,9 @@ __all__ = [
     "ParsedWorkflow",
     "PreflightExpectation",
     "PreflightReport",
+    "RunMode",
     "WorkflowFormatError",
     "WorkflowStep",
+    "default_dry_run",
     "parse_workflow",
 ]

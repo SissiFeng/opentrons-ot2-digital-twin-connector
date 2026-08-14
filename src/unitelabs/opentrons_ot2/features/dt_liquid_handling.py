@@ -59,7 +59,12 @@ class DigitalTwinLiquidHandlingController(sila.Feature):
         status: sila.Status,
         intermediate: sila.Intermediate[OperationProgress],
     ) -> TrackedLiquidVolume:
-        """Aspirate a validated volume using the configured pipette calibration."""
+        """
+        Aspirate a validated volume using the configured pipette calibration.
+
+        The operation is cancellable; cancellation marks the tracked liquid volume
+        as unknown and halts the plunger.
+        """
         report_progress(status, intermediate, 0.0, OperationPhase.STARTING, "Starting aspiration.")
         try:
             snapshot = await self._controller.aspirate(mount.value, volume, flow_rate)
@@ -85,7 +90,12 @@ class DigitalTwinLiquidHandlingController(sila.Feature):
         status: sila.Status,
         intermediate: sila.Intermediate[OperationProgress],
     ) -> TrackedLiquidVolume:
-        """Dispense a validated volume using the configured pipette calibration."""
+        """
+        Dispense a validated volume using the configured pipette calibration.
+
+        The operation is cancellable; cancellation marks the tracked liquid volume
+        as unknown and halts the plunger.
+        """
         report_progress(status, intermediate, 0.0, OperationPhase.STARTING, "Starting dispense.")
         try:
             snapshot = await self._controller.dispense(mount.value, volume, flow_rate)

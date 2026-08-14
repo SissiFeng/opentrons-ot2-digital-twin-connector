@@ -1,7 +1,7 @@
 {
   "config_schema_sha256": "0bfecb4175032951ad484b1ce3c6290028472d17988891c50599bfa4035cc195",
   "config_schema_version": "1.0",
-  "contract_id": "2092afe298601f3a946b0746cc17f52bd9ea504d19e9d34a4c6f3eb4cf24899c",
+  "contract_id": "bd710e8b7d66f1f739330945c13b6401450682a0a6a7675c02478cf8f44bbffc",
   "features": [
     {
       "category": "robots",
@@ -78,7 +78,7 @@
         "PipetteNotAttachedError",
         "TipStateError"
       ],
-      "fdl_sha256": "8d9e524b83858ec92915cd1286251440fd06c82475a3e5ca3f37d82b21b06ab7",
+      "fdl_sha256": "1751c1442020549240cd04f06d8e42c735e763a6bcbfa487a15da6723a6ee60f",
       "fqi": "io.github.sissifeng/robots/LiquidHandlingController/v1",
       "identifier": "LiquidHandlingController",
       "originator": "io.github.sissifeng",
@@ -131,7 +131,7 @@
         "PipetteNotAttachedError",
         "TipStateError"
       ],
-      "fdl_sha256": "5dd6c1e1262f222957c9f3c6cf1a3910199db2dc11f1ce6f47709c221af0aafa",
+      "fdl_sha256": "b427a2383324a8bfc8aa8a9a973d05840689733269968c3247711ece8d189822",
       "fqi": "io.github.sissifeng/robots/MotionController/v2",
       "identifier": "MotionController",
       "originator": "io.github.sissifeng",
@@ -223,7 +223,7 @@
         "TipPickupError",
         "TipStateError"
       ],
-      "fdl_sha256": "67f7470d0c767e6316fa7262662f91b0a27eb34c7641bd88fb648eb0de56832a",
+      "fdl_sha256": "98ff5572cd297d1c053d9c8332a59c4d10e77cfd69675443c3093f511289e076",
       "fqi": "io.github.sissifeng/robots/TipController/v1",
       "identifier": "TipController",
       "originator": "io.github.sissifeng",

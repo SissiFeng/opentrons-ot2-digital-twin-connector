@@ -56,10 +56,23 @@ class DigitalTwinMotionController(sila.Feature):
         status: sila.Status,
         intermediate: sila.Intermediate[OperationProgress],
     ) -> None:
-        """Home all axes and publish completion or cancellation state."""
+        """
+        Home all axes and publish progress and cancellation state.
+
+        Progress updates are published per homing phase; cancellation halts
+        hardware and requires a new home before continuing.
+        """
         report_progress(status, intermediate, 0.0, OperationPhase.STARTING, "Starting full OT-2 home.")
         try:
-            await self._controller.home()
+            await self._controller.home_with_progress(
+                lambda progress, message: report_progress(
+                    status,
+                    intermediate,
+                    progress,
+                    OperationPhase.EXECUTING,
+                    message,
+                )
+            )
         except asyncio.CancelledError:
             report_progress(status, intermediate, 1.0, OperationPhase.CANCELLED, "Home cancelled; hardware halted.")
             raise
@@ -76,7 +89,12 @@ class DigitalTwinMotionController(sila.Feature):
         status: sila.Status,
         intermediate: sila.Intermediate[OperationProgress],
     ) -> Position:
-        """Move one mount to an absolute calibrated deck position."""
+        """
+        Move one mount to an absolute calibrated deck position.
+
+        The operation is cancellable; cancellation halts the gantry and requires a
+        new home before further movement.
+        """
         report_progress(status, intermediate, 0.0, OperationPhase.STARTING, f"Starting {mount.value} move.")
         try:
             result = await self._controller.move_to(
@@ -85,6 +103,7 @@ class DigitalTwinMotionController(sila.Feature):
                 speed,
                 tip_reference=reference is PositionReference.TIP,
             )
+            report_progress(status, intermediate, 1.0, OperationPhase.EXECUTING, f"{mount.value} move complete.")
         except asyncio.CancelledError:
             report_progress(status, intermediate, 1.0, OperationPhase.CANCELLED, "Move cancelled; hardware halted.")
             raise
@@ -104,7 +123,12 @@ class DigitalTwinMotionController(sila.Feature):
         status: sila.Status,
         intermediate: sila.Intermediate[OperationProgress],
     ) -> Position:
-        """Resolve a symbolic labware well from the pinned configuration and move to it."""
+        """
+        Resolve a symbolic labware well from the pinned configuration and move to it.
+
+        The operation is cancellable; cancellation halts the gantry and requires a
+        new home before further movement.
+        """
         report_progress(
             status,
             intermediate,
@@ -121,6 +145,7 @@ class DigitalTwinMotionController(sila.Feature):
                 use_approach=height is WellHeight.APPROACH,
                 tip_reference=reference is PositionReference.TIP,
             )
+            report_progress(status, intermediate, 1.0, OperationPhase.EXECUTING, f"{mount.value} well move complete.")
         except asyncio.CancelledError:
             report_progress(status, intermediate, 1.0, OperationPhase.CANCELLED, "Move cancelled; hardware halted.")
             raise

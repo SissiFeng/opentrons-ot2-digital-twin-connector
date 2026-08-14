@@ -96,6 +96,59 @@ def _configuration_checks(
         return checks, None
     checks.append(Check("Matterix connector identity pins", True, asset.contract_id, ""))
     try:
+        asset.validate_joint_alignment()
+    except MatterixAssetConfigurationError as error:
+        checks.append(
+            Check(
+                "Verified OT-2 joint alignment",
+                False,
+                str(error),
+                "Measure and approve X/Y/Z/A zero/reference, direction, and motion endpoints in matterix_ot2.json.",
+            )
+        )
+    else:
+        checks.append(Check("Verified OT-2 joint alignment", True, asset.joint_alignment.alignment_id, ""))
+    try:
+        asset.validate_reference_frame_alignment()
+    except MatterixAssetConfigurationError as error:
+        checks.append(
+            Check(
+                "Verified world/base/deck alignment",
+                False,
+                str(error),
+                "Survey at least three non-collinear fiducials and approve the world/base/deck transforms.",
+            )
+        )
+    else:
+        checks.append(
+            Check(
+                "Verified world/base/deck alignment",
+                True,
+                asset.reference_frame_alignment.alignment_id,
+                "",
+            )
+        )
+    try:
+        asset.validate_tip_rack_bindings(connector)
+    except MatterixAssetConfigurationError as error:
+        checks.append(
+            Check(
+                "Verified individual tip addressing",
+                False,
+                str(error),
+                "Accept the composed nested-rigid manifest and pin its 96 one-to-one well/child mappings.",
+            )
+        )
+    else:
+        checks.append(
+            Check(
+                "Verified individual tip addressing",
+                True,
+                ", ".join(binding.binding_id for binding in asset.tip_rack_bindings),
+                "",
+            )
+        )
+    try:
         asset_path = asset.validate_asset_file()
     except MatterixAssetConfigurationError as error:
         checks.append(

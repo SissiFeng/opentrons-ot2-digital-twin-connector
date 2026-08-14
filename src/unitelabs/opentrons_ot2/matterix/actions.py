@@ -52,6 +52,15 @@ class DropTipCfg:
 
 
 @dataclasses.dataclass(frozen=True)
+class ReturnTipCfg:
+    """Return the attached nested tip to a selected rack well and release it."""
+
+    mount: str
+    labware_id: str
+    well: str
+
+
+@dataclasses.dataclass(frozen=True)
 class ReconcileTipCfg:
     """Apply an operator-inspection boundary to twin state."""
 
@@ -78,5 +87,13 @@ class DispenseCfg:
 
 
 OT2ActionCfg: TypeAlias = (
-    HomeCfg | MoveToCfg | MoveToWellCfg | PickUpTipCfg | DropTipCfg | ReconcileTipCfg | AspirateCfg | DispenseCfg
+    HomeCfg
+    | MoveToCfg
+    | MoveToWellCfg
+    | PickUpTipCfg
+    | DropTipCfg
+    | ReturnTipCfg
+    | ReconcileTipCfg
+    | AspirateCfg
+    | DispenseCfg
 )

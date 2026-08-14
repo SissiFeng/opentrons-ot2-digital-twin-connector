@@ -1,6 +1,6 @@
 [project]
 name = "sissifeng-opentrons-ot2-dt-connector"
-version = "0.1.0"
+version = "0.2.0"
 description = "An independent SiLA2 and digital-twin connector for the Opentrons OT-2"
 readme = "README.md"
 authors = [{name = "Sissi Feng", email = "isissifeng@gmail.com"}]
@@ -40,6 +40,11 @@ Issues = "https://github.com/sissifeng/opentrons-ot2-digital-twin-connector/issu
 [project.scripts]
 ot2-contract-check = "unitelabs.opentrons_ot2.digital_twin.contract_cli:main"
 ot2-matterix-preflight = "unitelabs.opentrons_ot2.matterix.preflight:main"
+ot2-matterix-env = "unitelabs.opentrons_ot2.matterix.env_cli:main"
+ot2-joint-alignment = "unitelabs.opentrons_ot2.matterix.alignment_cli:main"
+ot2-joint-calibrate = "unitelabs.opentrons_ot2.matterix.calibration_cli:main"
+ot2-frame-alignment = "unitelabs.opentrons_ot2.matterix.reference_frames_cli:main"
+ot2-tip-rack-binding = "unitelabs.opentrons_ot2.matterix.tip_rack_cli:main"
 
 [project.optional-dependencies]
 test = [

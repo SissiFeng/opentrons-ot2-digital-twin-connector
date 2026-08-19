@@ -73,7 +73,7 @@ Analysis snapshot:
 
 | Repository | Branch | Base commit | Worktree at analysis time | Evidence status |
 |---|---|---|---|---|
-| `opentrons-ot2-digital-twin-connector` | `feat/matterix-ot2-integration-readiness` | `a29e50850d62` | Technical-debt document was new | `CONFIRMED_CHECKOUT` |
+| `opentrons-ot2-digital-twin-connector` | `feat/matterix-ot2-integration-readiness` | `ad9aa53deb14` | P0 contracts and technical-debt document committed | `LOCAL_TESTED`; pushed |
 | `matterix-internal` | `chore/p0-technical-debt-gates` | `7c3f404524a7` | Clean branch stacked on PR #50 | `CI_VERIFIED` |
 | `matterix-assets-internal` | `chore/p0-asset-validation` | `a26eef230cff` | Clean asset-validation branch | `CI_VERIFIED` |
 
@@ -486,7 +486,7 @@ Work that may proceed in parallel:
 | Item | Implementation status | Current evidence |
 |---|---|---|
 | 1. Governance contract | Implemented with ownership exception | Roles remain `UNASSIGNED`; release promotion is blocked |
-| 2. CPU unit-test CI | Implemented, pushed, and CI-verified | 58 tests passed locally and in [GitHub Actions run 32291040172](https://github.com/ac-rad/Matterix-Internal/actions/runs/32291040172) |
+| 2. CPU unit-test CI | Implemented, pushed, and CI-verified | 58 tests passed locally and on final commit `7c3f404` in [GitHub Actions run 32291447290](https://github.com/ac-rad/Matterix-Internal/actions/runs/32291447290) |
 | 3. PR #50 Isaac Lab 3.0 compatibility matrix | Implemented as framework candidate | 2.3 is a legacy reference; strict Ubuntu GPU fingerprint, OT-2 smoke, and PR #51 exact tip-rack runtime acceptance remain pending |
 | 4. Manifest/report schemas | Implemented as draft | Matrix digest is pinned; release candidates re-hash fingerprint/smoke evidence and require matching content, authorized profile, clean inputs, and assigned owners |
 | 5. Asset CI | Implemented, pushed, and CI-verified | 67 LFS assets, 2 metadata files, and 198 metadata-entrypoint references passed in [GitHub Actions run 32291104742](https://github.com/ac-rad/Matterix_assets_internal/actions/runs/32291104742) |

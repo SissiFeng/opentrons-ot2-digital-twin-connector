@@ -213,7 +213,7 @@ names are treated as runtime search-path references, not repository files.
 | Gate | Current result | Evidence boundary |
 |---|---|---|
 | Governance/schema | Passes as `DRAFT` | Owners and release approval remain unassigned |
-| CPU unit tests | 58 passed locally and in GitHub Actions run 32291040172 | CPU evidence only; no Isaac/PhysX claim |
+| CPU unit tests | 58 passed locally and on final commit `7c3f404` in GitHub Actions run 32291447290 | CPU evidence only; no Isaac/PhysX claim |
 | Runtime fingerprint and smoke | PR #50 reports GPU runtime success; the new fingerprint correctly rejects macOS | Hashed fingerprint, OT-2 smoke, and PR #51 exact tip-rack runtime acceptance remain pending |
 | Revision manifest | Schema-valid draft with pinned matrix digest | Dirty repositories, unauthorized profile, missing or unverifiable runtime artifacts, and placeholder IDs prevent promotion |
 | Asset validation | 67 LFS assets, 2 metadata files, 198 references; local and GitHub Actions run 32291104742 passed | Static/LFS evidence only, not physics acceptance |

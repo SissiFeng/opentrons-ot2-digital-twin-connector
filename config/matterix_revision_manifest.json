@@ -7,7 +7,7 @@
     {
       "name": "opentrons-ot2-digital-twin-connector",
       "branch": "feat/matterix-ot2-integration-readiness",
-      "commit": "a29e50850d62abfab5e783e47e3b5d18bcf786e6",
+      "commit": "ad9aa53deb145387d97fe51e67257d98003fb719",
       "dirty": true
     },
     {

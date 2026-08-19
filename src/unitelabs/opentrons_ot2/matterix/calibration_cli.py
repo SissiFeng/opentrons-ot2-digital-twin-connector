@@ -6,7 +6,7 @@ import argparse
 import asyncio
 import json
 import sys
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .calibration_pipeline import (
@@ -48,7 +48,7 @@ def _validate_plan(args: argparse.Namespace) -> int:
 
 def _run(args: argparse.Namespace) -> int:
     plan = HardwareCalibrationPlan.from_file(args.plan)
-    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     evidence_path = Path(args.output_dir) / f"ot2-joint-calibration-{timestamp}.json"
     try:
         evidence = asyncio.run(

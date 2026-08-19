@@ -35,7 +35,8 @@ def test_validate_environment_reports_config_ok_even_when_runtime_missing() -> N
     assert by_name["matterix_ot2_actions"].ok is False
 
 
-def test_make_ot2_env_fails_closed_on_macos(tmp_path: Path) -> None:
+def test_make_ot2_env_fails_closed_on_macos(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("unitelabs.opentrons_ot2.matterix.env.platform.system", lambda: "Darwin")
     connector_path = tmp_path / "ot2_dt_config.json"
     connector_path.write_text(json.dumps(config_mapping(tmp_path / "state.json")), encoding="utf-8")
     with pytest.raises(MatterixEnvironmentError, match="Linux"):

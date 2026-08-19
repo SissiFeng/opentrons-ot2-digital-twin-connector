@@ -10,7 +10,7 @@ import math
 import re
 import uuid
 from collections.abc import Awaitable, Callable, Mapping
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Protocol
 
@@ -244,7 +244,7 @@ def new_evidence_bundle(
     if not _ADDRESS_PATTERN.fullmatch(robot_address):
         msg = "Robot address must be HOST:PORT"
         raise HardwareCalibrationError(msg)
-    now = datetime.now(UTC).isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     return {
         "schema_version": CALIBRATION_RUN_SCHEMA_VERSION,
         "run_id": str(uuid.uuid4()),
@@ -464,7 +464,7 @@ async def run_hardware_calibration(
 
 
 def _touch(evidence: dict[str, object]) -> None:
-    evidence["updated_at"] = datetime.now(UTC).isoformat()
+    evidence["updated_at"] = datetime.now(timezone.utc).isoformat()
 
 
 def write_evidence_bundle(path: str | Path, evidence: Mapping[str, object]) -> str:

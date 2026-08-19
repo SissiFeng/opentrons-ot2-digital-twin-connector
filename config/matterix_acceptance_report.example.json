@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "report_id": "matterix-ot2-isaac3-p0-schema-example",
+  "manifest_id": "matterix-ot2-isaac3-pr50-2026-08-19-draft",
+  "gate_id": "p0-cross-repository-schema",
+  "report_scope": "GATE",
+  "evidence_level": "CONFIRMED_CHECKOUT",
+  "started_at": "2026-08-19T16:00:00Z",
+  "finished_at": "2026-08-19T16:01:00Z",
+  "command": [
+    "uv",
+    "run",
+    "python",
+    "scripts/validate_matterix_acceptance.py",
+    "--manifest",
+    "config/matterix_revision_manifest.json",
+    "--report",
+    "config/matterix_acceptance_report.example.json"
+  ],
+  "checks": [
+    {
+      "check_id": "revision-manifest-schema",
+      "status": "PASS",
+      "evidence": "The draft revision manifest conforms to schema version 1.0."
+    },
+    {
+      "check_id": "robot-consumable-hash-separation",
+      "status": "PASS",
+      "evidence": "The OT-2 articulation and 96-tip composite use distinct asset roles and hashes."
+    }
+  ],
+  "artifacts": [],
+  "verdict": "DRAFT",
+  "sign_offs": [
+    {
+      "role": "cross_repository_release_owner",
+      "name": "UNASSIGNED",
+      "status": "UNASSIGNED"
+    },
+    {
+      "role": "robot_safety_owner",
+      "name": "UNASSIGNED",
+      "status": "UNASSIGNED"
+    }
+  ]
+}

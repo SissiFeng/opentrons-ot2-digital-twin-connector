@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import collections.abc
 import dataclasses
 import math
 
@@ -160,6 +161,26 @@ class OT2DigitalTwinController:
         except asyncio.CancelledError:
             await self.halt_after_cancel("HOME_CANCELLED")
             raise
+        await self._state.record("HOME")
+
+    async def home_with_progress(self, emit: collections.abc.Callable[[float, str], None]) -> None:
+        """
+        Home all axes while publishing truthful progress callbacks.
+
+        The callback receives ``(progress, message)`` and runs after each home
+        phase.  Cancellation still halts hardware and raises ``CancelledError``.
+        """
+        emit(0.0, "Starting full OT-2 home.")
+        phases = ("XYZ", "A", "B", "C")
+        total = len(phases)
+        try:
+            for index, phase in enumerate(phases, start=1):
+                await self._motion.home(phase)
+                emit(min(0.99, index / total), f"Homed {phase} axes.")
+        except asyncio.CancelledError:
+            await self.halt_after_cancel("HOME_CANCELLED")
+            raise
+        emit(1.0, "Full OT-2 home completed.")
         await self._state.record("HOME")
 
     async def move_to(self, mount: str, point: DeckPoint, speed: float, *, tip_reference: bool) -> DeckPoint:

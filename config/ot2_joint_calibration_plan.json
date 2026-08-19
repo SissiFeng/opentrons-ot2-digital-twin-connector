@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "home_axes": "XYZA",
+  "movement_speed_mm_s": 20.0,
+  "position_tolerance_mm": 0.25,
+  "axes": {
+    "X": {
+      "probe_delta_mm": -10.0,
+      "approved_min_mm": 0.0,
+      "approved_max_mm": null
+    },
+    "Y": {
+      "probe_delta_mm": -10.0,
+      "approved_min_mm": 0.0,
+      "approved_max_mm": null
+    },
+    "Z": {
+      "probe_delta_mm": -5.0,
+      "approved_min_mm": null,
+      "approved_max_mm": null
+    },
+    "A": {
+      "probe_delta_mm": -5.0,
+      "approved_min_mm": null,
+      "approved_max_mm": null
+    }
+  }
+}

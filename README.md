@@ -35,7 +35,7 @@ configuration schema are pinned by
 The current contract ID is:
 
 ```text
-2092afe298601f3a946b0746cc17f52bd9ea504d19e9d34a4c6f3eb4cf24899c
+bd710e8b7d66f1f739330945c13b6401450682a0a6a7675c02478cf8f44bbffc
 ```
 
 Connector startup fails if the runtime FDL differs from this artifact.
@@ -67,7 +67,7 @@ There are three distinct configuration files:
 | [`config/ot2_dt_config.json`](config/ot2_dt_config.json) | Versioned deck, labware, pipette, calibration, trash, and durable state path |
 | [`config/ot2_simulator_config.json`](config/ot2_simulator_config.json) | Explicit local process simulator |
 | [`config/ot2_dt_simulator_config.json`](config/ot2_dt_simulator_config.json) | Simulator-only confirmed calibration and `/tmp` state |
-| [`config/matterix_ot2.json`](config/matterix_ot2.json) | Matterix task, USD asset hash, joint mapping, action factory, and connector identity pins |
+| [`config/matterix_ot2.json`](config/matterix_ot2.json) | Matterix task, USD identity, joint/frame alignment, individual tip addressing, action factory, and connector identity pins |
 
 Before physical operation, create a local reviewed digital-twin configuration
 with measured geometry and definition hashes, set a real `calibration_id`, and
@@ -138,10 +138,115 @@ The Bridge:
 4. verifies connector/config/calibration/serial/pipette identity;
 5. executes once and records pre/post state.
 
-See `unitelabs.opentrons_ot2.bridge` for the adapter, transport, executor, and
-audit models.
+Execution modes (`unitelabs.opentrons_ot2.bridge.arbiter`):
+
+| Mode | Behavior |
+|---|---|
+| `SIM_ONLY` | preflight + replay on the simulator only |
+| `REAL_ONLY` | preflight + run on real hardware; simulator never consulted |
+| `SIM_FIRST_THEN_REAL` | preflight, simulator dry-run gate, then real execution |
+| `SHADOW` | run simulator and real in lockstep; report state divergence per step |
+
+The dry-run gate (`unitelabs.opentrons_ot2.bridge.dry_run`) is a pure,
+hardware-free feasibility check: it resolves every MoveToWell / PickUpTip
+target from the pinned configuration, checks deck bounds, and validates
+aspirate/dispense volumes against the instrument envelope.
+
+See `unitelabs.opentrons_ot2.bridge` for the adapter, transport, executor,
+arbiter, and audit models.
 
 ## Matterix status
+
+The connector-side P1/P2/P3 integration code is implemented, but the checked
+configuration remains deliberately non-executable until its real and Isaac Sim
+evidence is reviewed:
+
+| Area | Code status | Evidence still required |
+|---|---|---|
+| X/Y/Z/A zero, sign, and limits | Complete; paired hardware/simulation evidence builds a separate candidate config | Real-machine probe and Isaac Sim reference/direction/endpoint replay |
+| Nested rigid compatibility | Consumes PR47's selected-child `IsTipAttached` contract; no Franka fixture is used | Runtime child manifest from the exact PR47/PR7 composite |
+| Individual tip pickup/return | Explicit well → child mapping, safe vertical/XY/contact route, attach/detach, and return/retract are generated | Native OT-2 WebRTC run after all gates pass |
+| World/base/deck frames | Rigid-transform fitting, composition, inverse conversion, and candidate generation are complete | Surveyed non-collinear fiducials and operator review |
+
+### Joint-level sim-to-real alignment
+
+Matterix motion now uses a versioned per-axis contract for the four physical
+OT-2 USD joints:
+
+```text
+q_real_m = sign * q_sim_m + offset_m
+```
+
+The contract separately validates the reference position, direction, and both
+motion endpoints. The checked example remains deliberately `UNVERIFIED`, so
+connector-driven Matterix joint commands fail closed until real measurements
+and matching USD limits are supplied. B/C are explicitly semantic-only because
+the legacy OT-2 USD has no plunger joints.
+
+Inspect the current table with:
+
+```sh
+uv run ot2-joint-alignment check --json
+uv run ot2-joint-alignment check --strict
+```
+
+Run the complete operator-gated physical measurement session from the laptop:
+
+```sh
+sh scripts/calibrate_ot2_joints.sh <robot-host>
+```
+
+The pipeline validates the reviewed plan, checks connector health, refuses a
+simulator, homes only X/Y/Z/A, probes each axis at reduced speed, returns every
+axis to its reference, and writes checkpointed JSON plus a SHA-256 sidecar under
+`artifacts/ot2-joint-calibration/`. Use `endpoints` mode only after setting
+reviewed finite Z/A lower bounds in
+`config/ot2_joint_calibration_plan.json`.
+
+See [the measurement and acceptance procedure](docs/OT2_JOINT_ALIGNMENT.md).
+
+Complete real and simulation evidence is joined without overwriting the active
+configuration:
+
+```sh
+uv run ot2-joint-alignment build-candidate \
+  --hardware-evidence <hardware.json> \
+  --simulation-evidence <simulation.json> \
+  --alignment-id <reviewed-id> \
+  --output <candidate-config.json>
+```
+
+### Reference frames and individual tips
+
+Fit the two audited transform segments, then join the reviewed artifacts into a
+separate candidate config:
+
+```sh
+uv run ot2-frame-alignment derive --input <world-base-fiducials.json> --output <world-base.json>
+uv run ot2-frame-alignment derive --input <base-deck-fiducials.json> --output <base-deck.json>
+uv run ot2-frame-alignment build-candidate \
+  --world-from-base <world-base.json> \
+  --base-from-deck <base-deck.json> \
+  --alignment-id <reviewed-id> \
+  --output <candidate-config.json>
+```
+
+The PR7 layout exposes `pipette_tip_mesh_00` through
+`pipette_tip_mesh_95`; current PR47 materializes those 96 tips as nested
+children and spawns the empty static rack separately. The connector stores all
+96 well mappings explicitly and never derives a child name at runtime. Accept a
+runtime enumeration only when all 96 nested tip children match:
+
+```sh
+uv run ot2-tip-rack-binding check --strict --json
+uv run ot2-tip-rack-binding build-candidate \
+  --manifest <runtime-manifest.json> \
+  --labware-id tips_300 \
+  --binding-id <reviewed-id> \
+  --output <candidate-config.json>
+```
+
+See [the complete integration and acceptance boundary](docs/OT2_MATTERIX_INTEGRATION.md).
 
 The connector includes the correct workflow-level integration boundary:
 
@@ -153,26 +258,63 @@ external workflow
   -> matterix_sm.StateMachine.set_action_sequence(...)
 ```
 
-The current Matterix source inventory does not contain an OT-2 USD asset, an
-OT-2 gym task, or OT-2 compositional actions. The repository therefore does
-not substitute the existing Franka/beaker task or claim a real OT-2 Matterix
-run. `config/matterix_ot2.json` intentionally contains an asset-hash
-placeholder and a required external action-factory module.
+The generated task uses the external OT-2 asset/config and the nested tip-rack
+semantics from the Matterix integration branches. This repository does not
+vendor those payloads and does not treat the earlier Franka qualification as
+native OT-2 proof. `config/matterix_ot2.json` therefore retains an asset-hash
+placeholder and `UNVERIFIED` evidence states.
 
 Check the environment without launching Omniverse:
 
 ```sh
 uv run ot2-matterix-preflight --json
 uv run ot2-matterix-preflight --strict
+uv run ot2-matterix-env check --json
+uv run ot2-matterix-env check --strict
 ```
 
 Strict readiness requires Linux, Isaac Lab, `matterix_sm`, `matterix_tasks`,
-Gymnasium, confirmed physical calibration, a hash-pinned OT-2 USD asset, and an
-installed module exposing `build_ot2_action_cfg(action)`.
+Gymnasium, confirmed physical calibration, verified X/Y/Z/A alignment, reviewed
+world/base/deck transforms, an exact accepted nested-child manifest, a
+hash-pinned OT-2 USD, and an installed `build_ot2_action_cfg(action)` module.
 
-The import-safe planner and shadow comparison are fully unit-tested on macOS.
-Real Isaac Lab execution must be validated on a supported Linux Matterix
-machine once the OT-2 asset/action extension exists.
+To create the DT-side Matterix env once the OT-2 task extension exists:
+
+1. Generate the task-extension scaffold:
+   `uv run ot2-matterix-env generate <dir>` (writes `matterix_ot2_env.py`,
+   `__init__.py`, and a README into `<dir>`).
+2. Install `<dir>` into the Matterix Isaac Lab environment so its
+   `gym.register(...)` runs (import `matterix_tasks` first, or the package
+   itself).
+3. After `AppLauncher` has started Omniverse, build the env with
+   `make_ot2_env(task_id, connector_config_path=..., matterix_config_path=...)`
+   (see `unitelabs.opentrons_ot2.matterix.env`) and drive it with the
+   `matterix_sm.StateMachine` loop from the PoC `twin_sim.real_runner`.
+
+The generated `pick_and_return_tip` workflow uses the OT-2 pipette: move to a
+safe vertical position, translate above the selected well, descend, attach the
+explicit nested tip child, retract, return to the same well, detach to physics,
+and retract. It does not use a gripper or teleport the tip.
+
+The current PR47 semantic contract selects one nested child at a time. The
+checked connector example describes a RIGHT eight-channel pipette while the
+source-inspected PR47 sensor route is LEFT/single-child. The integration fails
+closed on that mismatch. Native multi-channel pickup requires an upstream
+multi-child attachment contract; this repository does not pretend one-child
+attachment validates an eight-channel pipette.
+
+### External Matterix integration deliverables
+
+The external branches must provide the exact OT-2 articulation, the PR47
+nested-rigid semantics, the PR7 rack layout, its separately spawned static rack,
+the 96-tip nested collection, the joint action primitive, and the registered gym
+task. The four physical USD joints are
+`PrismaticJointMiddleBar`, `PrismaticJointPipetteHolder`,
+`PrismaticJointLeftPipette`, and `PrismaticJointRightPipette`. B/C remain liquid
+semantics because the USD does not contain plunger joints.
+
+Until their hashes, manifests, and alignment evidence are accepted,
+`ot2-matterix-env check --strict` reports not ready by design.
 
 ## Dual-server OT-2 deployment
 

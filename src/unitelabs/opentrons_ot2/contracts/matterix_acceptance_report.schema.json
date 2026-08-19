@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unitelabs.io/schemas/matterix_acceptance_report.schema.json",
+  "title": "Matterix Acceptance Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_id",
+    "manifest_id",
+    "gate_id",
+    "report_scope",
+    "evidence_level",
+    "started_at",
+    "finished_at",
+    "command",
+    "checks",
+    "artifacts",
+    "verdict",
+    "sign_offs"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "report_id": {"type": "string", "minLength": 1},
+    "manifest_id": {"type": "string", "minLength": 1},
+    "gate_id": {"type": "string", "minLength": 1},
+    "report_scope": {"enum": ["GATE", "FINAL"]},
+    "evidence_level": {
+      "enum": ["CONFIRMED_CHECKOUT", "LOCAL_TESTED", "SIM_RUNTIME_VERIFIED", "HARDWARE_VERIFIED"]
+    },
+    "started_at": {"type": "string", "format": "date-time"},
+    "finished_at": {"type": "string", "format": "date-time"},
+    "command": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check_id", "status", "evidence"],
+        "properties": {
+          "check_id": {"type": "string", "minLength": 1},
+          "status": {"enum": ["PASS", "FAIL", "BLOCKED", "NOT_RUN"]},
+          "evidence": {"type": "string", "minLength": 1},
+          "metrics": {"type": "object"}
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "verdict": {"enum": ["DRAFT", "PASS", "FAIL", "BLOCKED"]},
+    "sign_offs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["role", "name", "status"],
+        "properties": {
+          "role": {
+            "enum": [
+              "cross_repository_release_owner",
+              "backup_owner",
+              "framework_maintainer",
+              "asset_maintainer",
+              "connector_maintainer",
+              "robot_safety_owner"
+            ]
+          },
+          "name": {"type": "string", "minLength": 1},
+          "status": {"enum": ["UNASSIGNED", "PENDING", "APPROVED", "REJECTED"]}
+        }
+      }
+    }
+  }
+}

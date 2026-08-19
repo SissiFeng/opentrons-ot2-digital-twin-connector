@@ -1,7 +1,7 @@
 # OT-2 Scripts
 
 Everything here does one of three things: **set up Tailscale**, **install the connector**,
-or **verify the robot is up**. Every script is meant to be run from the repo root
+**verify the robot is up**, or run the operator-gated joint calibration. Every script is meant to be run from the repo root
 (`sh scripts/<name>.sh <host>`), never inlined by hand on the robot — see AGENTS.md's
 "Hardware Driver Rules" / canonical-scripts convention.
 
@@ -92,3 +92,4 @@ installer that `setup_ot2.sh` calls into — copies the connector binary + confi
 | Script | Purpose |
 |--------|---------|
 | `switch_mode.sh` | Toggle the robot between the stock Opentrons app mode and the SiLA2 connector mode; persists across reboot. |
+| `calibrate_ot2_joints.sh` | From the laptop, validate the plan, verify the connector, and run the checkpointed X/Y/Z/A physical measurement pipeline. |

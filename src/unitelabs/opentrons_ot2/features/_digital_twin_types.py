@@ -207,6 +207,24 @@ def report_progress(
     phase: OperationPhase,
     message: str,
 ) -> None:
-    """Publish one observable-command progress update."""
+    """Publish one observable-command progress update with matching intermediate response."""
     status.update(progress=progress)
+    intermediate.send(OperationProgress(phase=phase, message=message))
+
+
+def report_remaining_time(
+    status: sila.Status,
+    intermediate: sila.Intermediate[OperationProgress],
+    progress: float,
+    remaining_seconds: float,
+    phase: OperationPhase,
+    message: str,
+) -> None:
+    """Publish progress plus an estimated remaining execution time."""
+    import datetime
+
+    status.update(
+        progress=progress,
+        remaining_time=datetime.timedelta(seconds=max(0.0, remaining_seconds)),
+    )
     intermediate.send(OperationProgress(phase=phase, message=message))

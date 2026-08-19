@@ -61,7 +61,12 @@ class DigitalTwinTipController(sila.Feature):
         status: sila.Status,
         intermediate: sila.Intermediate[OperationProgress],
     ) -> TipPresence:
-        """Move to a configured tip well, pick up, retract, and record software evidence."""
+        """
+        Move to a configured tip well, pick up, retract, and record software evidence.
+
+        The operation is cancellable; cancellation forces physical state to UNKNOWN
+        and requires reconciliation before retrying.
+        """
         report_progress(status, intermediate, 0.0, OperationPhase.STARTING, "Starting atomic tip pickup.")
         try:
             snapshot = await self._controller.pick_up_tip(mount.value, labware_id, well)
@@ -91,7 +96,12 @@ class DigitalTwinTipController(sila.Feature):
         status: sila.Status,
         intermediate: sila.Intermediate[OperationProgress],
     ) -> TipPresence:
-        """Move to configured trash, release, retract, and record software evidence."""
+        """
+        Move to configured trash, release, retract, and record software evidence.
+
+        The operation is cancellable; cancellation forces physical state to UNKNOWN
+        and requires reconciliation before retrying.
+        """
         report_progress(status, intermediate, 0.0, OperationPhase.STARTING, "Starting atomic tip release.")
         try:
             snapshot = await self._controller.drop_tip(mount.value)

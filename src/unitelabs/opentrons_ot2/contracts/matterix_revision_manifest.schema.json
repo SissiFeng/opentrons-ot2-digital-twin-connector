@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unitelabs.io/schemas/matterix_revision_manifest.schema.json",
+  "title": "Matterix Cross-Repository Revision Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_id",
+    "status",
+    "generated_at",
+    "repositories",
+    "runtime",
+    "assets",
+    "contracts",
+    "ownership"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "manifest_id": {"type": "string", "minLength": 1},
+    "status": {"enum": ["DRAFT", "RELEASE_CANDIDATE", "ACCEPTED"]},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "repositories": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "branch", "commit", "dirty"],
+        "properties": {
+          "name": {
+            "enum": [
+              "opentrons-ot2-digital-twin-connector",
+              "matterix-internal",
+              "matterix-assets-internal"
+            ]
+          },
+          "branch": {"type": "string", "minLength": 1},
+          "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+          "dirty": {"type": "boolean"}
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_id",
+        "evidence_status",
+        "operating_system",
+        "python",
+        "isaac_lab",
+        "isaac_sim",
+        "torch",
+        "cuda",
+        "compatibility_matrix",
+        "release_authorized"
+      ],
+      "properties": {
+        "profile_id": {"type": "string", "minLength": 1},
+        "evidence_status": {
+          "enum": ["REPORTED_RUNTIME", "LOCAL_TESTED", "SIM_RUNTIME_VERIFIED"]
+        },
+        "operating_system": {"type": "string", "minLength": 1},
+        "python": {"type": "string", "minLength": 1},
+        "isaac_lab": {"type": "string", "minLength": 1},
+        "isaac_sim": {"type": "string", "minLength": 1},
+        "torch": {"type": "string", "minLength": 1},
+        "cuda": {"type": "string", "minLength": 1},
+        "driver": {"type": "string", "minLength": 1},
+        "compatibility_matrix": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repository", "path", "sha256"],
+          "properties": {
+            "repository": {"const": "matterix-internal"},
+            "path": {"const": "docs/compatibility_matrix.json"},
+            "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        },
+        "release_authorized": {"type": "boolean"},
+        "fingerprint_artifact": {"$ref": "#/$defs/artifact"},
+        "smoke_artifact": {"$ref": "#/$defs/artifact"}
+      }
+    },
+    "assets": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["asset_id", "role", "entrypoint", "sha256"],
+        "properties": {
+          "asset_id": {"type": "string", "minLength": 1},
+          "role": {"enum": ["ROBOT_ARTICULATION", "CONSUMABLE_96_TIP_COMPOSITE"]},
+          "entrypoint": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "expected_child_count": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "contracts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "connector_contract_id",
+        "robot_asset_sha256",
+        "calibration_id",
+        "joint_alignment_id",
+        "tip_binding_id"
+      ],
+      "properties": {
+        "connector_contract_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "robot_asset_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "calibration_id": {"type": "string", "minLength": 1},
+        "joint_alignment_id": {"type": "string", "minLength": 1},
+        "tip_binding_id": {"type": "string", "minLength": 1}
+      }
+    },
+    "ownership": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cross_repository_release_owner",
+        "backup_owner",
+        "framework_maintainer",
+        "asset_maintainer",
+        "connector_maintainer",
+        "robot_safety_owner"
+      ],
+      "properties": {
+        "cross_repository_release_owner": {"$ref": "#/$defs/owner"},
+        "backup_owner": {"$ref": "#/$defs/owner"},
+        "framework_maintainer": {"$ref": "#/$defs/owner"},
+        "asset_maintainer": {"$ref": "#/$defs/owner"},
+        "connector_maintainer": {"$ref": "#/$defs/owner"},
+        "robot_safety_owner": {"$ref": "#/$defs/owner"}
+      }
+    },
+    "notes": {"type": "array", "items": {"type": "string"}}
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "owner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "status"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "status": {"enum": ["UNASSIGNED", "ASSIGNED", "APPROVED"]}
+      }
+    }
+  }
+}

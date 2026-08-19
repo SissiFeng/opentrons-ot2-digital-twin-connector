@@ -1,0 +1,81 @@
+{
+  "schema_version": "1.0",
+  "manifest_id": "matterix-ot2-isaac3-pr50-2026-08-19-draft",
+  "status": "DRAFT",
+  "generated_at": "2026-08-19T16:00:00Z",
+  "repositories": [
+    {
+      "name": "opentrons-ot2-digital-twin-connector",
+      "branch": "feat/matterix-ot2-integration-readiness",
+      "commit": "a29e50850d62abfab5e783e47e3b5d18bcf786e6",
+      "dirty": true
+    },
+    {
+      "name": "matterix-internal",
+      "branch": "chore/p0-technical-debt-gates",
+      "commit": "7c3f404524a7bfd3eb08a0d9908045bad5b92a0a",
+      "dirty": false
+    },
+    {
+      "name": "matterix-assets-internal",
+      "branch": "chore/p0-asset-validation",
+      "commit": "a26eef230cff8c0219046dcd0f54840601fb3ee8",
+      "dirty": false
+    }
+  ],
+  "runtime": {
+    "profile_id": "matterix-isaaclab-3.0-pr50",
+    "evidence_status": "REPORTED_RUNTIME",
+    "operating_system": "Ubuntu 24.04",
+    "python": "3.12.x",
+    "isaac_lab": "3.0.0b2*",
+    "isaac_sim": "6.0.1*",
+    "torch": "2.10.x+cu128",
+    "cuda": "12.8",
+    "driver": "RECORD_EXACT_NVIDIA_SMI_VALUE_AT_ACCEPTANCE",
+    "compatibility_matrix": {
+      "repository": "matterix-internal",
+      "path": "docs/compatibility_matrix.json",
+      "sha256": "04f715e1d70a64931889c799f4f6664fdbd3f46c9fffc86198964b4210c56785"
+    },
+    "release_authorized": false
+  },
+  "assets": [
+    {
+      "asset_id": "opentrons.ot2",
+      "role": "ROBOT_ARTICULATION",
+      "entrypoint": "robots/ot2/OT2_inst_light.usda",
+      "sha256": "757334a32c422387ac243d9e07b38e2fada978b67623dbdab88c2a86f02246c4"
+    },
+    {
+      "asset_id": "opentrons.ot2.tip_rack",
+      "role": "CONSUMABLE_96_TIP_COMPOSITE",
+      "entrypoint": "objects/racks/tip_rack/tiprack_with_tip_inst.usda",
+      "sha256": "a30999b3e30b887759bdf5d0864088a2c31320a42c051922f4a8bde60f50e4bb",
+      "expected_child_count": 96
+    }
+  ],
+  "contracts": {
+    "connector_contract_id": "bd710e8b7d66f1f739330945c13b6401450682a0a6a7675c02478cf8f44bbffc",
+    "robot_asset_sha256": "757334a32c422387ac243d9e07b38e2fada978b67623dbdab88c2a86f02246c4",
+    "calibration_id": "UNCONFIRMED",
+    "joint_alignment_id": "UNVERIFIED",
+    "tip_binding_id": "UNVERIFIED-PR7-NESTED-MANIFEST"
+  },
+  "ownership": {
+    "cross_repository_release_owner": {"name": "UNASSIGNED", "status": "UNASSIGNED"},
+    "backup_owner": {"name": "UNASSIGNED", "status": "UNASSIGNED"},
+    "framework_maintainer": {"name": "UNASSIGNED", "status": "UNASSIGNED"},
+    "asset_maintainer": {"name": "UNASSIGNED", "status": "UNASSIGNED"},
+    "connector_maintainer": {"name": "UNASSIGNED", "status": "UNASSIGNED"},
+    "robot_safety_owner": {"name": "UNASSIGNED", "status": "UNASSIGNED"}
+  },
+  "notes": [
+    "This draft records checkout evidence only and does not authorize a release or physical motion.",
+    "Isaac Lab 3.0 PR #50 is the selected framework candidate; Isaac Lab 2.3 is a legacy reference only.",
+    "PR #51 exact OT-2 nested tip-rack runtime acceptance remains pending.",
+    "A release candidate requires hashed strict-fingerprint and Isaac/PhysX smoke artifacts plus release_authorized=true in the matching compatibility profile.",
+    "The 96-tip composite hash is separate from the OT-2 robot articulation hash.",
+    "Dirty worktrees and unassigned approval roles intentionally keep this manifest in DRAFT status."
+  ]
+}

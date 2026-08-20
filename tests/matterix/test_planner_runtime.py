@@ -14,6 +14,7 @@ from unitelabs.opentrons_ot2.matterix import (
     DropTipCfg,
     HomeCfg,
     MatterixAssetConfigurationError,
+    MatterixRuntimeUnavailable,
     MoveToWellCfg,
     OT2MatterixAssetConfig,
     OT2MatterixPlanner,
@@ -34,6 +35,18 @@ from tests.matterix.helpers import (
 class FakeFactory:
     def build_ot2_action_cfg(self, action):
         return {"type": type(action).__name__, "action": action}
+
+
+class ExpandingFactory:
+    def build_ot2_action_cfg(self, action):
+        name = type(action).__name__
+        if isinstance(action, PickUpTipCfg):
+            return [
+                {"type": "approach", "source": name},
+                {"type": "attach", "source": name},
+                {"type": "lift", "source": name},
+            ]
+        return {"type": name, "action": action}
 
 
 class FakeStateMachine:
@@ -75,6 +88,44 @@ def test_state_machine_boundary_installs_complete_sequence(tmp_path: Path) -> No
     runtime = install_action_sequence(state_machine, plan.actions, FakeFactory())
     assert state_machine.configs == list(runtime)
     assert [item["type"] for item in runtime] == [type(action).__name__ for action in plan.actions]
+
+
+def test_state_machine_boundary_flattens_expanded_actions(tmp_path: Path) -> None:
+    _connector, plan = _plan(tmp_path)
+    state_machine = FakeStateMachine()
+
+    runtime = install_action_sequence(state_machine, plan.actions, ExpandingFactory())
+
+    assert state_machine.configs == list(runtime)
+    assert all(not isinstance(config, list | tuple) for config in runtime)
+    pickup_index = next(index for index, config in enumerate(runtime) if config["type"] == "approach")
+    assert [config["type"] for config in runtime[pickup_index : pickup_index + 3]] == [
+        "approach",
+        "attach",
+        "lift",
+    ]
+
+
+def test_state_machine_boundary_rejects_nested_factory_results(tmp_path: Path) -> None:
+    class NestedFactory:
+        def build_ot2_action_cfg(self, action):
+            return [[{"type": type(action).__name__}]]
+
+    _connector, plan = _plan(tmp_path)
+
+    with pytest.raises(MatterixRuntimeUnavailable, match="nested sequence"):
+        install_action_sequence(FakeStateMachine(), plan.actions, NestedFactory())
+
+
+def test_state_machine_boundary_rejects_empty_factory_results(tmp_path: Path) -> None:
+    class EmptyFactory:
+        def build_ot2_action_cfg(self, action):
+            return []
+
+    _connector, plan = _plan(tmp_path)
+
+    with pytest.raises(MatterixRuntimeUnavailable, match="empty action configuration"):
+        install_action_sequence(FakeStateMachine(), plan.actions, EmptyFactory())
 
 
 def test_asset_identity_and_hash_are_fail_closed(tmp_path: Path) -> None:

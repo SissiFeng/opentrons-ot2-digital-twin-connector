@@ -323,6 +323,16 @@ production catalog silently.
 
 ### P2B: OT-2 runtime, workflow, and Bridge
 
+Implementation checkpoint (2026-08-20):
+
+| Backlog | Implemented evidence | Remaining gate |
+|---|---|---|
+| INT-006 | The connector now flattens every expanded OT-2 action into one StateMachine primitive sequence and rejects empty or nested factory output. | Run the generated task extension in the pinned Isaac Lab/Matterix runtime. |
+| BRG-002 | `matterix-assets-internal` now owns a content-addressed 96-well/child runtime manifest; this connector pins the corresponding normalized child-manifest hash while keeping the binding `UNVERIFIED`. | Compare the exact discovered Isaac runtime manifest with the pinned map and record the artifact. |
+| INT-007 | `matterix-internal` now consumes `tip_child_id` through its nested-rigid view so only the selected child receives pose and velocity writes; CPU tests cover the addressing boundary. | Run approach, attach, lift, return, detach, settle, and 95-sibling stability checks in Isaac/PhysX. |
+| XREPO-002 | `DT-Orchestrator-Bridge-PoC` now provides a shared, fail-closed acceptance profile for OT-2/Matterix and Flex/SiLA without merging their mechanics. | Supply clean revision pins and simulation/hardware artifacts; no current draft is promoted to `READY`. |
+| BRG-001 | No physical measurement was added in this checkpoint. Existing joint and reference-frame placeholders still fail closed. | Collect and review X/Y/Z/A plus non-collinear world/base/deck evidence. |
+
 #### INT-006: converge the OT-2 environment and workflow
 
 Cover task registration, physical joints X/Y/Z/A, the B/C semantic boundary,

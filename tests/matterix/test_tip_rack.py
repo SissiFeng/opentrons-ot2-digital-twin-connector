@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
 from unitelabs.opentrons_ot2.digital_twin.config import DigitalTwinConfig
-from unitelabs.opentrons_ot2.matterix.tip_rack import TipRackBinding, TipRackBindingError
+from unitelabs.opentrons_ot2.matterix.tip_rack import (
+    TipRackBinding,
+    TipRackBindingError,
+    nested_manifest_sha256,
+)
 
 from tests.digital_twin.helpers import config_mapping
 from tests.matterix.helpers import verified_tip_binding, verified_tip_binding_mapping
@@ -69,3 +74,14 @@ def test_unknown_well_has_no_implicit_name_fallback() -> None:
     binding = TipRackBinding.from_mapping(mapping, index=0)
     with pytest.raises(TipRackBindingError, match="no nested child mapping"):
         binding.child_id("Z99")
+
+
+def test_checked_config_pins_source_inspected_manifest_without_claiming_runtime_acceptance() -> None:
+    config = json.loads(Path("config/matterix_ot2.json").read_text(encoding="utf-8"))
+    raw = config["tip_rack_bindings"][0]
+    binding = TipRackBinding.from_mapping(raw, index=0)
+    configured_children = [*binding.child_ids.values(), *binding.non_tip_child_ids]
+
+    assert binding.status == "UNVERIFIED"
+    assert binding.manifest_sha256 == nested_manifest_sha256(binding.asset_name, configured_children)
+    assert "tip-rack-runtime-manifest.json" in binding.evidence

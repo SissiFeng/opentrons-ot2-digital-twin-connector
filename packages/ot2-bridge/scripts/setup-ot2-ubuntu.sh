@@ -7,7 +7,7 @@ package_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
 test_root=${OT2_TEST_ROOT:-"$HOME/ot2-bridge-test"}
 mkdir -p "$test_root"
 test_root=$(CDPATH= cd -- "$test_root" && pwd)
-python3 -c 'import sys; assert sys.version_info >= (3, 10), "Python 3.10+ required"'
+python3 -I -c 'import sys; assert sys.version_info >= (3, 10), "Python 3.10+ required"'
 git lfs version
 
 checkout() {
@@ -31,11 +31,13 @@ checkout https://github.com/ac-rad/Matterix_assets_internal.git "$test_root/Matt
 git -C "$test_root/Matterix_assets_internal" lfs pull
 
 if [ ! -e "$test_root/bridge-venv" ]; then
-    python3 -m venv "$test_root/bridge-venv"
+    python3 -I -m venv "$test_root/bridge-venv"
 fi
-"$test_root/bridge-venv/bin/python" -m pip install "$package_dir[sila]"
+# An activated Isaac shell can export PYTHONPATH. Isolate the bridge installer
+# and backend from it; the separate Matterix process still uses the Isaac env.
+"$test_root/bridge-venv/bin/python" -I -m pip --isolated install "$package_dir[sila]"
 
-python3 - "$test_root" <<'PY'
+python3 -I - "$test_root" <<'PY'
 import os
 from pathlib import Path
 import secrets
@@ -60,7 +62,7 @@ if not env.exists():
 print(f"Prepared {root}")
 print("This did not install Isaac or command the OT-2.")
 print("Start the Ubuntu console:")
-print(f"{shlex.quote(str(root / 'bridge-venv/bin/lab-bridge'))} console --listen 100.119.227.39 --tailscale --password-file {shlex.quote(str(password))} --output {shlex.quote(str(root / 'runs'))}")
+print(f"{shlex.quote(str(root / 'bridge-venv/bin/python'))} -I -m ot2_bridge.flex_cli console --listen 100.119.227.39 --tailscale --password-file {shlex.quote(str(password))} --output {shlex.quote(str(root / 'runs'))}")
 print(f"Browser user: bridge. Read the password locally with: cat {shlex.quote(str(password))}")
 print(f"Matterix terminal: activate your existing Isaac environment, then source {shlex.quote(str(env))}")
 PY

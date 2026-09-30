@@ -1,0 +1,453 @@
+<Feature xmlns="http://www.sila-standard.org" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" SiLA2Version="1.1" FeatureVersion="1.0" Originator="ca.accelerationconsortium" Category="robots" xsi:schemaLocation="http://www.sila-standard.org https://gitlab.com/SiLA2/sila_base/raw/master/schema/FeatureDefinition.xsd">
+  <Identifier>MotionControlFeature</Identifier>
+  <DisplayName>Motion Control Feature</DisplayName>
+  <Description>
+    SiLA2 feature for OT-2 motion control.
+
+    Provides commands for gantry movement, homing, position queries,
+    and emergency stop via the Opentrons SmoothieDriver.
+
+    Axes:
+    - X: Gantry right (+X) / left (-X). Limit switch at +X.
+    - Y: Gantry back (+Y) / forward toward front window (-Y). Limit switch at +Y.
+    - Z: Left pipette mount up (+Z) / down (-Z). Limit switch at +Z.
+    - A: Right pipette mount up (+A) / down (-A). Limit switch at +A.
+    - B: Left pipette plunger up (+B) / down (-B). Limit switch at +B.
+    - C: Right pipette plunger up (+C) / down (-C). Limit switch at +C.
+  </Description>
+  <Command>
+    <Identifier>EmergencyStop</Identifier>
+    <DisplayName>Emergency Stop</DisplayName>
+    <Description>
+      Emergency stop - immediately halt all motion.
+
+      After calling this, you must re-home before resuming operation.
+    </Description>
+    <Observable>No</Observable>
+    <Response>
+      <Identifier>Response0</Identifier>
+      <DisplayName>Response 0</DisplayName>
+      <Description>Status message confirming the emergency stop.</Description>
+      <DataType>
+        <Basic>String</Basic>
+      </DataType>
+    </Response>
+  </Command>
+  <Command>
+    <Identifier>GetPosition</Identifier>
+    <DisplayName>Get Position</DisplayName>
+    <Description>Get the current position of all axes.</Description>
+    <Observable>No</Observable>
+    <Response>
+      <Identifier>Response0</Identifier>
+      <DisplayName>Response 0</DisplayName>
+      <Description>Current position of all axes in mm.</Description>
+      <DataType>
+        <Structure>
+          <Element>
+            <Identifier>X</Identifier>
+            <DisplayName>X</DisplayName>
+            <Description />
+            <DataType>
+              <Basic>Real</Basic>
+            </DataType>
+          </Element>
+          <Element>
+            <Identifier>Y</Identifier>
+            <DisplayName>Y</DisplayName>
+            <Description />
+            <DataType>
+              <Basic>Real</Basic>
+            </DataType>
+          </Element>
+          <Element>
+            <Identifier>Z</Identifier>
+            <DisplayName>Z</DisplayName>
+            <Description />
+            <DataType>
+              <Basic>Real</Basic>
+            </DataType>
+          </Element>
+          <Element>
+            <Identifier>A</Identifier>
+            <DisplayName>A</DisplayName>
+            <Description />
+            <DataType>
+              <Basic>Real</Basic>
+            </DataType>
+          </Element>
+          <Element>
+            <Identifier>B</Identifier>
+            <DisplayName>B</DisplayName>
+            <Description />
+            <DataType>
+              <Basic>Real</Basic>
+            </DataType>
+          </Element>
+          <Element>
+            <Identifier>C</Identifier>
+            <DisplayName>C</DisplayName>
+            <Description />
+            <DataType>
+              <Basic>Real</Basic>
+            </DataType>
+          </Element>
+        </Structure>
+      </DataType>
+    </Response>
+  </Command>
+  <Command>
+    <Identifier>Home</Identifier>
+    <DisplayName>Home</DisplayName>
+    <Description>
+      Home the specified axes.
+
+      Uses the full Opentrons homing sequence including current management,
+      unstick moves for plunger axes, and proper X/Y sequencing.
+    </Description>
+    <Observable>No</Observable>
+    <Parameter>
+      <Identifier>Axes</Identifier>
+      <DisplayName>Axes</DisplayName>
+      <Description>
+        Axes to home as a string of axis letters, e.g. "XYZABC" for a
+        full home or "BC" to home only the plungers. Case-insensitive.
+      </Description>
+      <DataType>
+        <Constrained>
+          <DataType>
+            <Basic>String</Basic>
+          </DataType>
+          <Constraints>
+            <Pattern>^[XYZABCxyzabc]+$</Pattern>
+          </Constraints>
+        </Constrained>
+      </DataType>
+    </Parameter>
+    <Response>
+      <Identifier>Response0</Identifier>
+      <DisplayName>Response 0</DisplayName>
+      <Description>HomeResult with the homed axes and final position.</Description>
+      <DataType>
+        <Structure>
+          <Element>
+            <Identifier>HomedAxes</Identifier>
+            <DisplayName>Homed Axes</DisplayName>
+            <Description />
+            <DataType>
+              <Basic>String</Basic>
+            </DataType>
+          </Element>
+          <Element>
+            <Identifier>Position</Identifier>
+            <DisplayName>Position</DisplayName>
+            <Description />
+            <DataType>
+              <Structure>
+                <Element>
+                  <Identifier>X</Identifier>
+                  <DisplayName>X</DisplayName>
+                  <Description />
+                  <DataType>
+                    <Basic>Real</Basic>
+                  </DataType>
+                </Element>
+                <Element>
+                  <Identifier>Y</Identifier>
+                  <DisplayName>Y</DisplayName>
+                  <Description />
+                  <DataType>
+                    <Basic>Real</Basic>
+                  </DataType>
+                </Element>
+                <Element>
+                  <Identifier>Z</Identifier>
+                  <DisplayName>Z</DisplayName>
+                  <Description />
+                  <DataType>
+                    <Basic>Real</Basic>
+                  </DataType>
+                </Element>
+                <Element>
+                  <Identifier>A</Identifier>
+                  <DisplayName>A</DisplayName>
+                  <Description />
+                  <DataType>
+                    <Basic>Real</Basic>
+                  </DataType>
+                </Element>
+                <Element>
+                  <Identifier>B</Identifier>
+                  <DisplayName>B</DisplayName>
+                  <Description />
+                  <DataType>
+                    <Basic>Real</Basic>
+                  </DataType>
+                </Element>
+                <Element>
+                  <Identifier>C</Identifier>
+                  <DisplayName>C</DisplayName>
+                  <Description />
+                  <DataType>
+                    <Basic>Real</Basic>
+                  </DataType>
+                </Element>
+              </Structure>
+            </DataType>
+          </Element>
+        </Structure>
+      </DataType>
+    </Response>
+  </Command>
+  <Command>
+    <Identifier>MoveThrough</Identifier>
+    <DisplayName>Move Through</DisplayName>
+    <Description>
+      Move through a sequence of absolute positions in one command.
+
+      Waypoints are queued into the Smoothie's look-ahead planner without a
+      position query between them, so consecutive segments blend instead of
+      decelerating to a stop at every point. A discrete MoveTo measures
+      ~241 ms per short move on the real robot (position read-back 82 ms,
+      execution+settle 153 ms, network 5 ms), so a multi-point path such as a
+      tip shake runs several times faster batched than as individual MoveTo
+      calls — and without the per-point jerk.
+
+      Every waypoint is validated against the axis bounds before any motion
+      starts; one bad waypoint rejects the whole batch with nothing moved.
+      Plunger axes (B, C) must stay at their current position in every
+      waypoint: batched moves skip Opentrons' plunger backlash preload, so
+      plunger motion here would silently cost liquid-handling accuracy — use
+      MoveTo, Aspirate or Dispense instead.
+    </Description>
+    <Observable>No</Observable>
+    <Parameter>
+      <Identifier>Waypoints</Identifier>
+      <DisplayName>Waypoints</DisplayName>
+      <Description>
+        Ordered absolute targets, each with the speed for the
+        segment ending at it (mm/sec, 0 = default speed).
+      </Description>
+      <DataType>
+        <Constrained>
+          <DataType>
+            <List>
+              <DataType>
+                <Structure>
+                  <Element>
+                    <Identifier>X</Identifier>
+                    <DisplayName>X</DisplayName>
+                    <Description />
+                    <DataType>
+                      <Basic>Real</Basic>
+                    </DataType>
+                  </Element>
+                  <Element>
+                    <Identifier>Y</Identifier>
+                    <DisplayName>Y</DisplayName>
+                    <Description />
+                    <DataType>
+                      <Basic>Real</Basic>
+                    </DataType>
+                  </Element>
+                  <Element>
+                    <Identifier>Z</Identifier>
+                    <DisplayName>Z</DisplayName>
+                    <Description />
+                    <DataType>
+                      <Basic>Real</Basic>
+                    </DataType>
+                  </Element>
+                  <Element>
+                    <Identifier>A</Identifier>
+                    <DisplayName>A</DisplayName>
+                    <Description />
+                    <DataType>
+                      <Basic>Real</Basic>
+                    </DataType>
+                  </Element>
+                  <Element>
+                    <Identifier>B</Identifier>
+                    <DisplayName>B</DisplayName>
+                    <Description />
+                    <DataType>
+                      <Basic>Real</Basic>
+                    </DataType>
+                  </Element>
+                  <Element>
+                    <Identifier>C</Identifier>
+                    <DisplayName>C</DisplayName>
+                    <Description />
+                    <DataType>
+                      <Basic>Real</Basic>
+                    </DataType>
+                  </Element>
+                  <Element>
+                    <Identifier>Speed</Identifier>
+                    <DisplayName>Speed</DisplayName>
+                    <Description />
+                    <DataType>
+                      <Basic>Real</Basic>
+                    </DataType>
+                  </Element>
+                </Structure>
+              </DataType>
+            </List>
+          </DataType>
+          <Constraints>
+            <MinimalElementCount>1</MinimalElementCount>
+          </Constraints>
+        </Constrained>
+      </DataType>
+    </Parameter>
+    <Response>
+      <Identifier>Response0</Identifier>
+      <DisplayName>Response 0</DisplayName>
+      <Description>The firmware-queried position after the final waypoint.</Description>
+      <DataType>
+        <Structure>
+          <Element>
+            <Identifier>X</Identifier>
+            <DisplayName>X</DisplayName>
+            <Description />
+            <DataType>
+              <Basic>Real</Basic>
+            </DataType>
+          </Element>
+          <Element>
+            <Identifier>Y</Identifier>
+            <DisplayName>Y</DisplayName>
+            <Description />
+            <DataType>
+              <Basic>Real</Basic>
+            </DataType>
+          </Element>
+          <Element>
+            <Identifier>Z</Identifier>
+            <DisplayName>Z</DisplayName>
+            <Description />
+            <DataType>
+              <Basic>Real</Basic>
+            </DataType>
+          </Element>
+          <Element>
+            <Identifier>A</Identifier>
+            <DisplayName>A</DisplayName>
+            <Description />
+            <DataType>
+              <Basic>Real</Basic>
+            </DataType>
+          </Element>
+          <Element>
+            <Identifier>B</Identifier>
+            <DisplayName>B</DisplayName>
+            <Description />
+            <DataType>
+              <Basic>Real</Basic>
+            </DataType>
+          </Element>
+          <Element>
+            <Identifier>C</Identifier>
+            <DisplayName>C</DisplayName>
+            <Description />
+            <DataType>
+              <Basic>Real</Basic>
+            </DataType>
+          </Element>
+        </Structure>
+      </DataType>
+    </Response>
+    <DefinedExecutionErrors>
+      <Identifier>OutOfBoundsError</Identifier>
+      <Identifier>PlungerAxisNotSupportedError</Identifier>
+    </DefinedExecutionErrors>
+  </Command>
+  <Property>
+    <Identifier>HomedFlags</Identifier>
+    <DisplayName>Homed Flags</DisplayName>
+    <Description>Get homing status for each axis.</Description>
+    <Observable>No</Observable>
+    <DataType>
+      <Structure>
+        <Element>
+          <Identifier>X</Identifier>
+          <DisplayName>X</DisplayName>
+          <Description />
+          <DataType>
+            <Basic>Boolean</Basic>
+          </DataType>
+        </Element>
+        <Element>
+          <Identifier>Y</Identifier>
+          <DisplayName>Y</DisplayName>
+          <Description />
+          <DataType>
+            <Basic>Boolean</Basic>
+          </DataType>
+        </Element>
+        <Element>
+          <Identifier>Z</Identifier>
+          <DisplayName>Z</DisplayName>
+          <Description />
+          <DataType>
+            <Basic>Boolean</Basic>
+          </DataType>
+        </Element>
+        <Element>
+          <Identifier>A</Identifier>
+          <DisplayName>A</DisplayName>
+          <Description />
+          <DataType>
+            <Basic>Boolean</Basic>
+          </DataType>
+        </Element>
+        <Element>
+          <Identifier>B</Identifier>
+          <DisplayName>B</DisplayName>
+          <Description />
+          <DataType>
+            <Basic>Boolean</Basic>
+          </DataType>
+        </Element>
+        <Element>
+          <Identifier>C</Identifier>
+          <DisplayName>C</DisplayName>
+          <Description />
+          <DataType>
+            <Basic>Boolean</Basic>
+          </DataType>
+        </Element>
+      </Structure>
+    </DataType>
+  </Property>
+  <Property>
+    <Identifier>IsSimulating</Identifier>
+    <DisplayName>Is Simulating</DisplayName>
+    <Description>Check if running in simulation mode.</Description>
+    <Observable>No</Observable>
+    <DataType>
+      <Basic>Boolean</Basic>
+    </DataType>
+  </Property>
+  <DefinedExecutionError>
+    <Identifier>OutOfBoundsError</Identifier>
+    <DisplayName>Out Of Bounds Error</DisplayName>
+    <Description>Requested position exceeds the software travel limit for that axis.</Description>
+  </DefinedExecutionError>
+  <DefinedExecutionError>
+    <Identifier>PlungerAxisNotSupportedError</Identifier>
+    <DisplayName>Plunger Axis Not Supported Error</DisplayName>
+    <Description>
+      A MoveThrough waypoint moves a plunger axis (B or C), which is not supported.
+
+      Batched moves skip Opentrons' plunger backlash preload, which would cost
+      liquid-handling accuracy. Send the waypoint's B/C values equal to the
+      current position, and use MoveTo / Aspirate / Dispense for plunger motion.
+    </Description>
+  </DefinedExecutionError>
+  <DefinedExecutionError>
+    <Identifier>TipProbeError</Identifier>
+    <DisplayName>Tip Probe Error</DisplayName>
+    <Description>Common base class for all non-exit exceptions.</Description>
+  </DefinedExecutionError>
+</Feature>

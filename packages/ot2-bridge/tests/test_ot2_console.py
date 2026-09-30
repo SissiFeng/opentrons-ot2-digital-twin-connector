@@ -1,6 +1,7 @@
 import copy
 import io
 import json
+from pathlib import Path
 import zipfile
 
 import pytest
@@ -28,8 +29,8 @@ def test_instrument_contracts_are_separate():
         assert json.loads(archive.read("plan.json")) == plan
         assert b"OT-2 HOME" in archive.read("README.txt")
         assert "bridge-src/ot2_bridge/ot2_console.py" in archive.namelist()
-        assert b'MATTERIX_PYTHON' in archive.read("serve-sim.sh")
-        assert b'./matterix.sh' not in archive.read("serve-sim.sh")
+        assert b"MATTERIX_PYTHON" in archive.read("serve-sim.sh")
+        assert b"./matterix.sh" not in archive.read("serve-sim.sh")
 
 
 def test_ot2_profile_binds_both_physical_models_and_its_own_assets():
@@ -41,7 +42,10 @@ def test_ot2_profile_binds_both_physical_models_and_its_own_assets():
     assert profile["pipettes"]["identity_source"] == "operator_reported"
     assert profile["pipettes"]["left"] == {"model": "p10_multi_v1.6", "channels": 8}
     assert profile["pipettes"]["right"] == {"model": "p300_multi_v2.0", "channels": 8}
-    profile["pipettes"]["left"], profile["pipettes"]["right"] = profile["pipettes"]["right"], profile["pipettes"]["left"]
+    profile["pipettes"]["left"], profile["pipettes"]["right"] = (
+        profile["pipettes"]["right"],
+        profile["pipettes"]["left"],
+    )
     with pytest.raises(ValueError, match="pipettes"):
         ot2.validate_profile(profile)
 
@@ -219,6 +223,19 @@ async def test_ot2_standard_sila_wire(tmp_path, monkeypatch):
     connector.register(MotionControlFeature(controller))
     await connector.start()
     transport = OT2SiLATransport(port=int(connector.sila_server._address.rsplit(":", 1)[1]))
+    command = transport.command
+
+    async def with_deployed_definition(feature, name, **parameters):
+        response = await command(feature, name, **parameters)
+        if (feature, name) == ("SiLAService", "GetFeatureDefinition"):
+            # The deployed connector has additional commands beyond this local
+            # simulator. In sila2 0.14, MoveThrough's constrained list of inline
+            # structures fails code generation even when we only read position.
+            xml = Path(__file__).with_name("fixtures").joinpath("ot2-motion-20260930.xml").read_text()
+            return dict.fromkeys(response, xml)
+        return response
+
+    monkeypatch.setattr(transport, "command", with_deployed_definition)
     try:
         await transport.connect()
         info = await transport.describe()

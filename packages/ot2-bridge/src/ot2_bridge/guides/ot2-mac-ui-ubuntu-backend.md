@@ -21,12 +21,13 @@ Port 3389 is remote desktop; 22 is SSH; neither is the SiLA or bridge port.
 
 ## 1. Mac terminal: keep the OT-2 SiLA forward running
 
-First confirm `ssh ot2` still works and the physical connector listens on 50051.
+First confirm `ssh -B en8 ot2` works and the physical connector listens on 50051.
 Use its actual port if different. No connector installation or mode switch is
 performed here.
 
 ```sh
-ssh -N -g -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
+ssh -B en8 -N -g -o ConnectTimeout=5 -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
   -L 100.122.149.108:15051:127.0.0.1:50051 ot2
 ```
 
@@ -34,7 +35,11 @@ Leave this terminal open. Bind only the Mac Tailscale IP, not `0.0.0.0` or its
 Wi-Fi IP. SiLA uses the existing encrypted Tailscale network between Ubuntu and
 Mac, then SSH between Mac and OT-2. Access to that forwarded port grants access
 to the connector; the tailnet policy should permit the Ubuntu peer only.
-If `ssh ot2` times out, fix the wired connection/SSH alias first; Bridge cannot
+On this Mac, `en8` was the active wired adapter on 2026-09-30. Unbound SSH chose
+Wi-Fi (`en0`) for the OT-2 link-local address and timed out; `-B en8` fixed it.
+If adapters change, check `networksetup -listallhardwareports` and substitute
+the current wired interface. Do not start a second tunnel on an occupied port.
+If SSH still times out, fix the wired connection/SSH alias first; Bridge cannot
 reach the robot through a failed SSH connection. No automatic retry of motion
 is performed after reconnecting.
 
@@ -62,12 +67,14 @@ checkout. Set `OT2_TEST_ROOT` to a new directory if you need another test copy.
 
 ```sh
 cat "$HOME/ot2-bridge-test/console-password"
-"$HOME/ot2-bridge-test/bridge-venv/bin/lab-bridge" console \
+"$HOME/ot2-bridge-test/bridge-venv/bin/python" -I -m ot2_bridge.flex_cli console \
   --listen 100.119.227.39 --tailscale \
   --password-file "$HOME/ot2-bridge-test/console-password" \
   --output "$HOME/ot2-bridge-test/runs"
 ```
 
+`-I` keeps inherited Isaac `PYTHONPATH` and user-site packages out of this backend.
+The separate Matterix terminal below deliberately keeps its Isaac environment.
 The password is generated locally, is not committed, and must remain private.
 The console only accepts this Tailscale interface and Tailscale peers. Password
 authentication protects the page and all API routes; Host, Origin and session
@@ -78,6 +85,10 @@ connection. The console refuses ordinary LAN/public exposure.
 
 Open **http://100.119.227.39:8088/**. Log in with user **bridge** and the password
 displayed in the Ubuntu terminal.
+Use Safari, Chrome or Firefox if an embedded browser shows
+`ERR_INVALID_AUTH_CREDENTIALS` without offering the login dialog. A response of
+`401 Unauthorized` before login means the console is reachable and needs these
+credentials; it does not mean the OT-2 tunnel is down.
 
 1. Select **OT-2**. Open **Instrument binding**.
 2. Set **SiLA host / Mac Tailscale IP** to `100.122.149.108` and the port to `15051`.
@@ -141,3 +152,19 @@ If the browser cannot connect, verify `tailscale ip -4` on Ubuntu, the console's
 printed URL, and its host firewall/Tailscale policy for TCP 8088. If the connector
 check fails, inspect the Mac SSH terminal and confirm the actual OT-2 SiLA port.
 The final physical and Isaac outcomes must be read from the current run reports.
+
+## Update an existing bridge installation
+
+Stop only the bridge console with Ctrl+C in Ubuntu terminal A, then run:
+
+```sh
+cd "$HOME/ot2-bridge-code"
+git pull --ff-only
+"$HOME/ot2-bridge-test/bridge-venv/bin/python" -I -m pip --isolated install './packages/ot2-bridge[sila]'
+```
+
+Restart it with the command in step 3. The password, source/assets checkouts and
+run reports are retained. Refresh the Mac page and repeat **Check connector**
+before reviewing a new plan. Version 0.5.1 selects the live home/readback SiLA
+endpoints before compiling the client schema; unrelated `MoveThrough` commands
+in newer connectors no longer block this check. No robot software is changed.

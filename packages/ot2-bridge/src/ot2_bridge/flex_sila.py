@@ -76,7 +76,7 @@ class FlexSiLATransport:
                 xml = single(await self.command("SiLAService", "GetFeatureDefinition", FeatureIdentifier=identifier))
                 if not isinstance(xml, str) or len(xml) > 1_000_000 or not xml.lstrip().startswith("<"):
                     raise ValueError("Invalid feature definition")
-                model = Feature(xml)
+                model = Feature(self._client_feature_definition(name, xml))
                 if str(model.fully_qualified_identifier) != identifier:
                     raise ValueError("Feature definition identity mismatch")
                 self._add(name, model)
@@ -84,6 +84,10 @@ class FlexSiLATransport:
         except BaseException:
             await self.close()
             raise
+
+    def _client_feature_definition(self, name, xml):
+        """Allow an adapter to select the endpoints it consumes before codegen."""
+        return xml
 
     def _add(self, name, model):
         stub = getattr(model._grpc_module, f"{model._identifier}Stub")(self.channel)

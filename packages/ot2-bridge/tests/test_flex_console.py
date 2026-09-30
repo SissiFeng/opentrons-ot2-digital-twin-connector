@@ -1,4 +1,5 @@
 import http.client
+import asyncio
 import json
 import threading
 
@@ -30,6 +31,136 @@ def request(server, method, path, data=None, *, token=True, headers=None):
     status, raw = result.status, result.read()
     connection.close()
     return status, raw
+
+
+def test_repeated_http_checks_keep_one_live_event_loop(console, monkeypatch):
+    from ot2_bridge import flex_console
+
+    loops = []
+
+    async def inspect(*args, **kwargs):
+        loops.append(asyncio.get_running_loop())
+        return {"read_only_fixture": True}
+
+    monkeypatch.setattr(flex_console, "control", inspect)
+    for _ in range(3):
+        assert request(console, "POST", "/api/inspect", {"profile": profile_template()})[0] == 200
+    assert len(set(loops)) == 1
+    assert not loops[0].is_closed()
+    console.server_close()
+    assert loops[0].is_closed()
+
+
+def test_stop_can_share_the_loop_with_a_pending_check(console, monkeypatch):
+    from ot2_bridge import flex_console
+
+    started = threading.Event()
+    loops = []
+    gate = None
+    result = []
+
+    async def control(profile, action, **kwargs):
+        nonlocal gate
+        loops.append(asyncio.get_running_loop())
+        if action == "inspect":
+            gate = asyncio.Event()
+            started.set()
+            await gate.wait()
+        else:
+            assert action == "stop"
+            gate.set()
+        return {"test_action": action}
+
+    monkeypatch.setattr(flex_console, "control", control)
+    thread = threading.Thread(
+        target=lambda: result.append(request(console, "POST", "/api/inspect", {"profile": profile_template()}))
+    )
+    thread.start()
+    assert started.wait(2)
+    try:
+        assert request(console, "POST", "/api/stop", {"profile": profile_template()})[0] == 200
+    finally:
+        thread.join(timeout=3)
+    assert not thread.is_alive()
+    assert result[0][0] == 200
+    assert len(set(loops)) == 1
+
+
+def test_console_shutdown_finishes_async_cleanup_before_closing_loop():
+    from ot2_bridge.flex_console import ConsoleRuntime
+
+    runtime = ConsoleRuntime()
+    started = threading.Event()
+    closed_on_live_loop = []
+    errors = []
+
+    async def pending():
+        try:
+            started.set()
+            await asyncio.Event().wait()
+        finally:
+            await asyncio.sleep(0)
+            closed_on_live_loop.append(not asyncio.get_running_loop().is_closed())
+
+    def work():
+        try:
+            runtime.run(pending())
+        except RuntimeError as error:
+            errors.append(str(error))
+
+    thread = threading.Thread(target=work)
+    thread.start()
+    assert started.wait(2)
+    runtime.close()
+    thread.join(timeout=2)
+    assert not thread.is_alive()
+    assert closed_on_live_loop == [True]
+    assert runtime.loop.is_closed()
+    assert errors == ["Bridge request cancelled during shutdown; physical stop is not confirmed"]
+
+
+def test_console_repeated_sila_checks_use_the_owned_runtime(console):
+    pytest.importorskip("sila2")
+    pytest.importorskip("unitelabs.cdk")
+    from unitelabs.cdk import Connector, SiLAServerConfig
+    from unitelabs.opentrons_ot2 import OpentronsOt2Config
+    from unitelabs.opentrons_ot2.features.motion_control import MotionControlFeature
+    from unitelabs.opentrons_ot2.io import OT2MotionController
+    from ot2_bridge.ot2_console import profile_template as ot2_profile
+
+    loop_errors = []
+
+    async def setup():
+        asyncio.get_running_loop().set_exception_handler(lambda loop, context: loop_errors.append(context))
+        controller = await OT2MotionController.build(simulate=True)
+        connector = Connector(
+            OpentronsOt2Config(
+                use_simulator=True,
+                sila_server=SiLAServerConfig(hostname="127.0.0.1", port=0, tls=False),
+                cloud_server_endpoint=None,
+                discovery=None,
+            )
+        )
+        connector.register(MotionControlFeature(controller))
+        await connector.start()
+        return controller, connector
+
+    controller, connector = console.state.runtime.run(setup())
+    profile = ot2_profile()
+    profile["real"]["port"] = int(connector.sila_server._address.rsplit(":", 1)[1])
+    try:
+        for _ in range(3):
+            status, body = request(console, "POST", "/api/inspect", {"profile": profile})
+            assert status == 200, body
+            assert json.loads(body)["is_simulating"] is True
+    finally:
+
+        async def cleanup():
+            await connector.stop()
+            await controller.disconnect()
+
+        console.state.runtime.run(cleanup())
+    assert loop_errors == []
 
 
 def test_console_serves_real_assets_and_reviews_sim_only(console):

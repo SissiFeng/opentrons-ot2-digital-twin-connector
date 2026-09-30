@@ -153,6 +153,49 @@ printed URL, and its host firewall/Tailscale policy for TCP 8088. If the connect
 check fails, inspect the Mac SSH terminal and confirm the actual OT-2 SiLA port.
 The final physical and Isaac outcomes must be read from the current run reports.
 
+### Ping succeeds but Ubuntu cannot open Mac port 15051
+
+Run these in a **new Ubuntu terminal** with a shell prompt, not the terminal
+currently running the Bridge server:
+
+```sh
+ip route get 100.122.149.108
+tailscale ping --c 1 --timeout 5s 100.122.149.108
+python3 -u -c 'import socket; print("Testing Mac port...", flush=True); socket.create_connection(("100.122.149.108",15051),5); print("TCP connected")'
+```
+
+The expected route uses `tailscale0`. A successful Tailscale ping does not prove
+that the policy allows this TCP connection. In the 2026-09-30 field test, routing
+and ping passed, but the Mac's effective inbound policy had no allow rule for
+Ubuntu `100.119.227.39` on TCP `15051`. Mac-to-Ubuntu HTTP access can work while
+this opposite direction is blocked.
+
+Ask the tailnet administrator to allow only this source/destination/port. For a
+policy using `grants`, the administrator can add this entry to the existing
+`grants` array, preserving the rest of the policy:
+
+```json
+{
+  "src": ["100.119.227.39"],
+  "dst": ["100.122.149.108"],
+  "ip": ["tcp:15051"]
+}
+```
+
+This permits the Ubuntu Bridge backend to access the Mac's SSH forward to the
+physical OT-2 SiLA control service. See the official
+[Tailscale grants syntax](https://tailscale.com/docs/reference/syntax/grants).
+After the approved policy is applied, repeat the TCP check and **Check connector**.
+Do not replace the tailnet policy or open all ports to troubleshoot this case.
+
+### `PollerCompletionQueue` reports `Event loop is closed`
+
+Update the Bridge to 0.5.2 or later and restart only its console. Older consoles
+used a new asyncio event loop for each HTTP request; repeated/concurrent gRPC
+checks could leave callbacks on a closed loop. Version 0.5.2 uses one persistent
+console loop and completes channel cleanup before closing it. This repair does
+not change Tailscale authorization and does not require restarting the robot.
+
 ## Update an existing bridge installation
 
 Stop only the bridge console with Ctrl+C in Ubuntu terminal A, then run:

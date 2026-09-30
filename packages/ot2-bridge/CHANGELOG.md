@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.2 — 2026-09-30
+
+- Keep all console SiLA requests and paired runs on one persistent asyncio loop. Repeated HTTP checks previously created and closed separate loops, leaving gRPC completion callbacks targeting closed loops. Shut down pending transports before closing the console loop; cancellation still does not confirm a physical stop.
+- Show checking, success and failure feedback immediately below Check connector, disable duplicate checks while pending, and include the backend's target address and troubleshooting guidance in connection timeouts.
+- Document the required Ubuntu-to-Mac TCP 15051 Tailscale grant. Tailscale ping and Mac-to-Ubuntu browser access alone do not verify this reverse connection. The field test found no matching inbound allow rule for this endpoint; an administrator must authorize the access.
+
 ## 0.5.1 — 2026-09-30
 
 - Compile only the live OT-2 Home, EmergencyStop, GetPosition, HomedFlags and IsSimulating endpoints consumed by this adapter. The deployed connector's unrelated MoveThrough definition triggered a sila2 0.14 codegen error and blocked discovery. Preserve selected endpoint definitions and reject missing or duplicate endpoints.

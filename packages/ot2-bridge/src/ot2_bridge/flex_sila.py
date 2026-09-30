@@ -66,7 +66,14 @@ class FlexSiLATransport:
             ],
         )
         try:
-            await asyncio.wait_for(self.channel.channel_ready(), self.timeout)
+            try:
+                await asyncio.wait_for(self.channel.channel_ready(), self.timeout)
+            except asyncio.TimeoutError as error:
+                raise RuntimeError(
+                    f"SiLA connection to {self.host}:{self.port} timed out after {self.timeout:g}s. "
+                    "Check reachability from the Bridge backend computer, the SSH forward, "
+                    "Tailscale access and proxy settings. No robot command was sent."
+                ) from error
             self._add("SiLAService", Feature(SiLAServiceFeature._feature_definition))
             implemented = await self.property("SiLAService", "ImplementedFeatures")
             for name in feature_names if feature_names is not None else self.feature_identifiers:

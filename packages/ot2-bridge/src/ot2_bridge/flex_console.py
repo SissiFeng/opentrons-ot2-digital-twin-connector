@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from concurrent.futures import CancelledError
 import io
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -21,6 +22,58 @@ from .wire import fingerprint
 from .network import private_ipv4, is_tailscale_address
 
 
+class ConsoleRuntime:
+    """Keep every console gRPC channel on one event loop until shutdown.
+
+    HTTP handlers use separate threads. Creating/closing an asyncio loop per
+    request leaves gRPC completion callbacks pointing at those closed loops.
+    The console owns this runtime; the thin bridge adapters do not own threads.
+    """
+
+    def __init__(self):
+        self.loop = asyncio.new_event_loop()
+        self.lock = threading.Lock()
+        self.closing = False
+        self.thread = threading.Thread(target=self._serve, name="bridge-asyncio", daemon=True)
+        self.thread.start()
+
+    def _serve(self):
+        asyncio.set_event_loop(self.loop)
+        try:
+            self.loop.run_forever()
+        finally:
+            pending = asyncio.all_tasks(self.loop)
+            for task in pending:
+                task.cancel()
+            # Let each transport's finally block close its channel on the same
+            # live loop. Cancelling an await does not stop the physical robot.
+            self.loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            self.loop.run_until_complete(self.loop.shutdown_asyncgens())
+            self.loop.run_until_complete(self.loop.shutdown_default_executor())
+            self.loop.close()
+
+    def run(self, coroutine):
+        with self.lock:
+            if self.closing or self.loop.is_closed():
+                coroutine.close()
+                raise RuntimeError("Bridge console is shutting down; physical stop is not confirmed")
+            future = asyncio.run_coroutine_threadsafe(coroutine, self.loop)
+        try:
+            return future.result()
+        except CancelledError as error:
+            raise RuntimeError("Bridge request cancelled during shutdown; physical stop is not confirmed") from error
+
+    def close(self):
+        with self.lock:
+            if self.closing:
+                return
+            self.closing = True
+            self.loop.call_soon_threadsafe(self.loop.stop)
+        self.thread.join(timeout=10)
+        if self.thread.is_alive():
+            raise RuntimeError("Bridge shutdown is still pending; physical stop is not confirmed")
+
+
 class ConsoleState:
     def __init__(self, output):
         self.token = secrets.token_urlsafe(32)
@@ -32,6 +85,7 @@ class ConsoleState:
         self.stopping = False
         self.active_profile = None
         self.stop_requested = threading.Event()
+        self.runtime = ConsoleRuntime()
 
     def launch(self, mode, hardware, reviewed_fingerprint):
         """Consume a reviewed plan once; serialize this console's device actions."""
@@ -62,7 +116,7 @@ class ConsoleState:
 
         def work():
             try:
-                result = asyncio.run(
+                result = self.runtime.run(
                     run_connected(
                         plan, mode=mode, hardware=hardware, emit=emit, stop_requested=self.stop_requested.is_set
                     )
@@ -203,9 +257,15 @@ def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale
                         with zipfile.ZipFile(io.BytesIO(bundle_bytes(plan))) as archive:
                             archive.extractall(folder)
                         state.review = plan
-                    self.respond(200, {"plan": plan, "fingerprint": fingerprint(plan),
-                                       "backend_bundle_directory": str(folder),
-                                       "serve_command": f"cd {shlex.quote(str(folder))} && sh serve-sim.sh"})
+                    self.respond(
+                        200,
+                        {
+                            "plan": plan,
+                            "fingerprint": fingerprint(plan),
+                            "backend_bundle_directory": str(folder),
+                            "serve_command": f"cd {shlex.quote(str(folder))} && sh serve-sim.sh",
+                        },
+                    )
                 elif self.path == "/api/run":
                     with state.lock:
                         if state.review is None or fingerprint(state.review) != data["fingerprint"]:
@@ -235,7 +295,7 @@ def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale
                             state.active_profile = profile
                             state.stop_requested.clear()
                     try:
-                        result = asyncio.run(
+                        result = state.runtime.run(
                             control(
                                 profile,
                                 action,
@@ -256,7 +316,18 @@ def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale
             except (ValueError, KeyError, TypeError, OSError, RuntimeError) as error:
                 self.respond(400, {"error": f"{type(error).__name__}: {error}"})
 
-    server = ThreadingHTTPServer((host, port), Handler)
+    class ConsoleServer(ThreadingHTTPServer):
+        def server_close(self):
+            try:
+                super().server_close()
+            finally:
+                state.runtime.close()
+
+    try:
+        server = ConsoleServer((host, port), Handler)
+    except BaseException:
+        state.runtime.close()
+        raise
     server.url = f"http://{host}:{server.server_port}"
     server.state = state
     return server

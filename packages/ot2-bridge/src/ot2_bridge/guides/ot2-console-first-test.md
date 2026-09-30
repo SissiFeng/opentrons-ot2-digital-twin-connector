@@ -25,7 +25,7 @@ For a wheel installation:
 
 ```sh
 python3 -m venv bridge-venv
-bridge-venv/bin/pip install '/absolute/path/ot2_bridge-0.5.1-py3-none-any.whl[sila]'
+bridge-venv/bin/pip install '/absolute/path/ot2_bridge-0.5.2-py3-none-any.whl[sila]'
 bridge-venv/bin/lab-bridge console
 ```
 

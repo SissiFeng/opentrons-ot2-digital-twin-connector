@@ -5,3 +5,5 @@
 .connection-fields input{width:100%;padding:8px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);color:var(--ink)}
 
 .launch-command { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.connector-status { margin: 10px 0 0; padding: 10px; font-size: 12px; overflow-wrap: anywhere; background: var(--soft); border-left: 3px solid var(--accent); }
+.connector-status[data-state="error"] { color: var(--danger); border-color: var(--danger); background: #f5e9e3; }

@@ -1,4 +1,5 @@
 import base64
+import asyncio
 import json
 import threading
 
@@ -10,6 +11,30 @@ from ot2_bridge.ot2_console import profile_template, validate_profile
 from ot2_bridge.ot2_sila import OT2SiLATransport
 from ot2_bridge.flex_sila import FlexSiLATransport
 from test_flex_console import request
+
+
+@pytest.mark.asyncio
+async def test_sila_connection_timeout_names_backend_target_and_closes_channel(monkeypatch):
+    grpc = pytest.importorskip("grpc")
+    pytest.importorskip("sila2")
+
+    class UnreachableChannel:
+        closed = False
+
+        async def channel_ready(self):
+            await asyncio.Event().wait()
+
+        async def close(self):
+            self.closed = True
+
+    channel = UnreachableChannel()
+    monkeypatch.setattr(grpc.aio, "insecure_channel", lambda *args, **kwargs: channel)
+    transport = OT2SiLATransport("100.122.149.108", 15051, timeout=0.01)
+    with pytest.raises(RuntimeError, match=r"100\.122\.149\.108:15051.*timed out.*Bridge backend.*No robot command"):
+        await transport.connect()
+    assert channel.closed
+    assert transport.channel is None
+    assert transport.features == {}
 
 
 @pytest.mark.parametrize("host", ["0.0.0.0", "8.8.8.8", "169.254.169.254", "host.example", "::1", None, []])
@@ -59,12 +84,21 @@ def test_all_routes_require_browser_login_and_review_is_available_on_backend(tmp
         assert request(server, "GET", "/", headers={"Authorization": "Basic wrong"})[0] == 401
         assert request(server, "GET", "/api/profile", token=False, headers=auth)[0] == 400
         assert request(server, "GET", "/", headers={**auth, "Host": "evil.test"})[0] == 400
-        assert request(server, "POST", "/api/review", {"profile": profile_template()},
-                       headers={**auth, "Origin": "https://evil.test"})[0] == 400
+        assert (
+            request(
+                server,
+                "POST",
+                "/api/review",
+                {"profile": profile_template()},
+                headers={**auth, "Origin": "https://evil.test"},
+            )[0]
+            == 400
+        )
         status, body = request(server, "POST", "/api/review", {"profile": profile_template()}, headers=auth)
         assert status == 200, body
         reviewed = json.loads(body)
         from pathlib import Path
+
         folder = Path(reviewed["backend_bundle_directory"])
         assert json.loads((folder / "plan.json").read_text()) == reviewed["plan"]
         assert (folder / "serve-sim.sh").is_file()

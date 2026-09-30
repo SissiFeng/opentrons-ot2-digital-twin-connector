@@ -291,7 +291,7 @@ wheels = [
 
 [[package]]
 name = "ot2-bridge"
-version = "0.5.2"
+version = "0.6.0"
 source = { editable = "." }
 
 [package.optional-dependencies]

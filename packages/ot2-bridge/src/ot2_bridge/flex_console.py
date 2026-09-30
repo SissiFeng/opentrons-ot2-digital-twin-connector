@@ -14,6 +14,12 @@ import shlex
 import threading
 import uuid
 import zipfile
+from urllib.parse import urlsplit, parse_qs
+
+from .gateway import GatewayBroker, GatewayAdapter
+from .managed_matterix import ManagedMatterix
+from .flex_runner import run_plan
+from .remote import RemoteSimulation
 
 from .instruments import make_plan, profile_template, validate_profile
 from .flex_bundle import bundle_bytes
@@ -75,7 +81,7 @@ class ConsoleRuntime:
 
 
 class ConsoleState:
-    def __init__(self, output):
+    def __init__(self, output, site=None):
         self.token = secrets.token_urlsafe(32)
         self.output = Path(output).resolve()
         self.lock = threading.Lock()
@@ -85,6 +91,9 @@ class ConsoleState:
         self.stopping = False
         self.active_profile = None
         self.stop_requested = threading.Event()
+        self.managed = site is not None
+        self.gateways = GatewayBroker((site or {}).get("gateways", []))
+        self.native = ManagedMatterix((site or {}).get("matterix"), (site or {}).get("matterix_by_device"))
         self.runtime = ConsoleRuntime()
 
     def launch(self, mode, hardware, reviewed_fingerprint):
@@ -101,6 +110,8 @@ class ConsoleState:
                 raise ValueError("The console connects to physical SiLA hardware; development simulation is CLI-only")
             if mode != "sim-only":
                 validate_profile(plan["profile"], hardware=True)
+            if self.managed:
+                self.gateways.match(plan["profile"])
             run_dir = self.output / plan["binding"]["run_id"]
             run_dir.mkdir(parents=True, exist_ok=False)
             (run_dir / "plan.json").write_text(json.dumps(plan, indent=2))
@@ -108,7 +119,14 @@ class ConsoleState:
             self.busy = True
             self.active_profile = plan["profile"]
             self.stop_requested.clear()
-            self.job = {"status": "running", "events": [], "run_id": plan["binding"]["run_id"], "output": str(run_dir)}
+            self.job = {
+                "status": "running",
+                "events": [],
+                "run_id": plan["binding"]["run_id"],
+                "output": str(run_dir),
+                "profile": plan["profile"],
+                "mode": mode,
+            }
 
         def emit(event):
             with self.lock:
@@ -117,7 +135,9 @@ class ConsoleState:
         def work():
             try:
                 result = self.runtime.run(
-                    run_connected(
+                    self.run_managed(plan, mode, run_dir, emit)
+                    if self.managed
+                    else run_connected(
                         plan, mode=mode, hardware=hardware, emit=emit, stop_requested=self.stop_requested.is_set
                     )
                 )
@@ -136,8 +156,52 @@ class ConsoleState:
         threading.Thread(target=work, daemon=True).start()
         return {"run_id": plan["binding"]["run_id"]}
 
+    async def run_managed(self, plan, mode, directory, emit):
+        real = GatewayAdapter(self.gateways, plan) if mode != "sim-only" else None
+        begun = False
+        result = {"binding": plan["binding"], "mode": mode, "status": "held", "steps": []}
+        try:
+            simulation = None
+            if mode != "real-only":
+                port = await self.native.start(plan, directory, emit, self.stop_requested.is_set)
+                simulation = RemoteSimulation(port, timeout=90)
+            if self.stop_requested.is_set():
+                raise RuntimeError("Stop requested before device dispatch")
+            if real:
+                await real.begin()
+                begun = True
+            result = await run_plan(
+                plan, mode=mode, real=real, simulation=simulation, emit=emit, stop_requested=self.stop_requested.is_set
+            )
+        except (Exception, asyncio.CancelledError) as error:
+            result["error"] = f"{type(error).__name__}: {error}. No automatic retry; physical stop not confirmed."
+            if mode != "real-only" and self.native.state != "ready":
+                self.native.state, self.native.error = "failed", str(error)
+        finally:
+            for cleanup in ([real.finish] if begun else []) + [self.native.close]:
+                try:
+                    await cleanup()
+                except (Exception, asyncio.CancelledError) as error:
+                    result["status"] = "held"
+                    result.setdefault("cleanup_errors", []).append(f"{type(error).__name__}: {error}")
+                    result["error"] = result.get("error", "") + " Cleanup incomplete; reconcile before another run."
+        return result
 
-def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale=False):
+    async def managed_control(self, profile, action):
+        key = self.gateways.match(profile)
+        if action == "home":
+            raise ValueError("Review the Home workflow and use Run device")
+        if (
+            action == "stop"
+            and self.busy
+            and self.job.get("status") == "running"
+            and self.job.get("mode") == "sim-only"
+        ):
+            return {"message": "Simulation stop requested; no device command sent"}
+        return await self.gateways.request(key, action, timeout=35 if action == "inspect" else 120)
+
+
+def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale=False, site_config=None):
     host = private_ipv4(host)
     remote = not host.startswith("127.")
     if tailscale and not is_tailscale_address(host):
@@ -153,7 +217,8 @@ def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale
         if len(password) < 24 or not password.isascii() or any(c.isspace() for c in password):
             raise ValueError("Console password must contain at least 24 ASCII characters without whitespace")
         expected_auth = "Basic " + base64.b64encode(f"bridge:{password}".encode()).decode()
-    state = ConsoleState(output)
+    site = json.loads(Path(site_config).read_text()) if site_config else None
+    state = ConsoleState(output, site)
     static = Path(__file__).parent / "web"
 
     class Handler(BaseHTTPRequestHandler):
@@ -174,7 +239,8 @@ def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header(
                 "Content-Security-Policy",
-                "default-src 'self'; style-src 'self'; script-src 'self'; object-src 'none'; frame-ancestors 'none'",
+                "default-src 'self'; img-src 'self' blob:; style-src 'self'; "
+                "script-src 'self'; object-src 'none'; frame-ancestors 'none'",
             )
             self.end_headers()
             self.wfile.write(content)
@@ -219,6 +285,20 @@ def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale
                 elif self.path in ("/api/profile", "/api/profile/ot2", "/api/profile/flex"):
                     instrument = "flex" if self.path.endswith("/flex") else "ot2"
                     self.respond(200, profile_template(instrument))
+                elif self.path == "/api/site":
+                    self.respond(
+                        200,
+                        {
+                            "managed": state.managed,
+                            "devices": state.gateways.catalog(),
+                            "native_configured": bool(state.native.config or state.native.runtime_by_device),
+                        },
+                    )
+                elif self.path == "/api/native":
+                    self.respond(200, state.native.snapshot())
+                elif urlsplit(self.path).path == "/api/native/frame":
+                    run_id = parse_qs(urlsplit(self.path).query).get("run_id", [""])[0]
+                    self.respond(200, state.native.frame(run_id), "image/png")
                 elif self.path == "/api/job":
                     with state.lock:
                         snapshot = json.loads(json.dumps(state.job))
@@ -234,7 +314,36 @@ def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale
             except (ValueError, OSError) as error:
                 self.respond(400, {"error": str(error)})
 
+        def gateway_post(self):
+            try:
+                self.trusted()
+                if tailscale and not is_tailscale_address(self.client_address[0]):
+                    raise ValueError("Connect through Tailscale")
+                key = self.headers.get("X-Device-ID", "")
+                state.gateways.authorize(key, self.headers.get("Authorization", ""))
+                if self.headers.get_content_type() != "application/json":
+                    raise ValueError("JSON required")
+                size = int(self.headers.get("Content-Length", "0"))
+                if not 0 < size <= 100_000:
+                    raise ValueError("Invalid request size")
+                data = json.loads(self.rfile.read(size))
+                if self.path == "/gateway/register":
+                    value = state.gateways.register(key, data["profile"])
+                elif self.path == "/gateway/poll":
+                    value = {"command": state.gateways.poll(key, data["session"])}
+                elif self.path == "/gateway/result":
+                    state.gateways.result(key, data["session"], data["result"])
+                    value = {"accepted": True}
+                else:
+                    raise ValueError("Unknown gateway route")
+                self.respond(200, value)
+            except (ValueError, KeyError, TypeError, OSError, RuntimeError) as error:
+                self.respond(400, {"error": str(error)})
+
         def do_POST(self):
+            if self.path.startswith("/gateway/"):
+                self.gateway_post()
+                return
             if not self.authenticated():
                 return
             try:
@@ -246,6 +355,8 @@ def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale
                     raise ValueError("Invalid request size")
                 data = json.loads(self.rfile.read(size))
                 if self.path == "/api/review":
+                    if state.managed:
+                        state.gateways.match(data["profile"])
                     plan = make_plan(data["profile"], str(uuid.uuid4()))
                     with state.lock:
                         if state.busy or state.stopping:
@@ -261,6 +372,7 @@ def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale
                         200,
                         {
                             "plan": plan,
+                            "managed": state.managed,
                             "fingerprint": fingerprint(plan),
                             "backend_bundle_directory": str(folder),
                             "serve_command": f"cd {shlex.quote(str(folder))} && sh serve-sim.sh",
@@ -296,7 +408,9 @@ def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale
                             state.stop_requested.clear()
                     try:
                         result = state.runtime.run(
-                            control(
+                            state.managed_control(profile, action)
+                            if state.managed
+                            else control(
                                 profile,
                                 action,
                                 hardware=data.get("hardware"),
@@ -321,6 +435,9 @@ def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale
             try:
                 super().server_close()
             finally:
+                state.gateways.close()
+                if not state.runtime.closing:
+                    state.runtime.run(state.native.close())
                 state.runtime.close()
 
     try:

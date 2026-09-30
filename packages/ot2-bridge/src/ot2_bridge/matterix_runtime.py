@@ -134,11 +134,22 @@ def native_observation(obs: dict, profile: dict, revision: str) -> Observation:
 class MatterixRuntime:
     """Own one initialized environment on its main thread for the whole session."""
 
-    def __init__(self, env, state_machine, obs, profile: dict, *, timeout: float = 60, is_running=lambda: True):
+    def __init__(
+        self,
+        env,
+        state_machine,
+        obs,
+        profile: dict,
+        *,
+        timeout: float = 60,
+        is_running=lambda: True,
+        after_step=lambda: None,
+    ):
         if env.num_envs != 1:
             raise ValueError("A real-device mirror requires exactly one Matterix environment")
         self.env, self.sm, self.obs, self.profile = env, state_machine, obs, profile
         self.timeout, self.is_running = timeout, is_running
+        self.after_step = after_step
         self.busy, self.fault = False, ""
 
     def observe(self, revision="initial") -> Observation:
@@ -167,6 +178,7 @@ class MatterixRuntime:
                 else:
                     action = action.to(self.env.device)
                 self.obs, _, terminated, truncated, _ = self.env.step(action, semantic_actions=semantics)
+                self.after_step()
                 if bool(terminated.any()) or bool(truncated.any()):
                     raise RuntimeError("Environment terminated/auto-reset; session state is no longer continuous")
                 if bool(self.sm.action_sequence_failure.any()):

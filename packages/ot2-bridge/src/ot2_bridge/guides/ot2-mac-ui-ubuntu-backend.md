@@ -1,5 +1,7 @@
 # Mac browser, Ubuntu bridge + Matterix, wired OT-2 via Mac
 
+> Legacy direct connection procedure. For automatic native startup and the outbound gateway, use [the browser application guide](browser-ot2-test.md). That mode does not require Ubuntu → Mac TCP 15051.
+
 This procedure runs **home and readback only**. It adds no tip or liquid semantics.
 The nominal visual asset is left `p10_multi_v1.6` (8 channels), right
 `p300_multi_v2.0` (8 channels). Models are operator-reported; the current SiLA

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ot2-bridge"
-version = "0.5.2"
+version = "0.6.0"
 description = "Thin operation mapping for OT-2 and Flex real and Matterix backends"
 requires-python = ">=3.10"
 dependencies = []
@@ -20,3 +20,5 @@ packages = ["src/ot2_bridge"]
 ot2-bridge = "ot2_bridge.cli:main"
 
 lab-bridge = "ot2_bridge.flex_cli:main"
+lab-bridge-gateway = "ot2_bridge.gateway_agent:main"
+lab-bridge-setup = "ot2_bridge.site_setup:main"

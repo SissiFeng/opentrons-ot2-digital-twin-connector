@@ -1,5 +1,10 @@
 # OT-2 / Flex bridge
 
+For the **browser-operated Ubuntu application** (automatic native Matterix startup,
+native view, outbound device gateway), start with the [0.6.0 OT-2 test guide](src/ot2_bridge/guides/browser-ot2-test.md).
+No Ubuntu-to-Mac SiLA port access is required in this mode. GPU and physical
+acceptance must still be performed in the lab.
+
 For the current Mac-browser / Ubuntu-backend / wired-OT-2 setup, follow [this field guide](src/ot2_bridge/guides/ot2-mac-ui-ubuntu-backend.md). This path tests home and readback with dual eight-channel visual assets; no tip/liquid semantics are added.
 
 

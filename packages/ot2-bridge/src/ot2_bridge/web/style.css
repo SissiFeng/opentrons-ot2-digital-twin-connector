@@ -7,3 +7,5 @@
 .launch-command { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
 .connector-status { margin: 10px 0 0; padding: 10px; font-size: 12px; overflow-wrap: anywhere; background: var(--soft); border-left: 3px solid var(--accent); }
 .connector-status[data-state="error"] { color: var(--danger); border-color: var(--danger); background: #f5e9e3; }
+
+.native-panel{margin-top:30px;border:1px solid var(--line);background:var(--surface);padding:24px}.native-canvas{background:var(--soft);min-height:260px;display:flex;align-items:center;justify-content:center;margin:18px 0 12px}.native-canvas img{display:block;width:100%;max-height:620px;object-fit:contain}.native-canvas p{padding:32px;color:var(--muted)}#native-caption{min-height:2em}#device-status{min-height:3em}

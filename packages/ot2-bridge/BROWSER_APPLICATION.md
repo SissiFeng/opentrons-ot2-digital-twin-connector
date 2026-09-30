@@ -7,9 +7,9 @@ preview it, run Matterix on the Ubuntu GPU workstation, see the native Matterix
 view and execution observations, and then explicitly run the device or select
 paired execution. The browser computer has no instrument-control role.
 
-This is the target application design accepted during the 2026-09-30 field test.
-It is not a claim that the current 0.5.2 console implements the managed runtime,
-viewer or outbound gateway described below.
+Version 0.6.0 implements the managed runtime, native frame feed and outbound
+gateway described below. See [the executable OT-2 test guide](src/ot2_bridge/guides/browser-ot2-test.md).
+CPU/HTTP/browser fixture acceptance is separate from native GPU and physical acceptance.
 
 ```mermaid
 flowchart LR
@@ -100,25 +100,25 @@ services once; a user should not copy a shell command for every simulation run.
 - Preserve the current OT-2 stop limitation: its connector can queue Stop behind
   Home. A browser stop request is not an immediate physical emergency stop.
 
-## Current implementation and acceptance gap
+## Implementation and field acceptance
 
-Version 0.5.2 provides the authenticated remote console, native-plan export,
-thin OT-2/Flex mappings, independent observations, paired-step execution and a
-persistent console asyncio loop. Native Matterix startup is still manual, and
-the direct SiLA path still needs backend-to-connector network access.
+Version 0.6.0 adds the configured outbound device gateway, native process supervisor,
+RGB frame feed with freshness labels, browser device selection, run restoration
+and one-time site configuration. Direct legacy CLI/console operation remains
+available when `--site-config` is omitted.
 
-The following must be implemented and verified before calling this a complete
-browser-operated application:
+Gateway requests are delivered at most once by the mailbox and recorded before
+local dispatch. Lost response => held/unknown, never inferred success. Physical
+side attempt files prevent replay of a run ID. A local provider factory is the
+extension point for another orchestrator; the hub only sees operations and
+observations. One application currently reserves one run at a time.
 
-- A registered outbound device gateway and corresponding backend adapter path.
-- An Ubuntu Matterix process supervisor driven from the reviewed browser run.
-- Native Matterix visual output in the browser with source and freshness labels.
-- Instrument selection without per-user host/port or terminal configuration.
-- End-to-end browser acceptance for simulate, device-only and paired execution,
-  using the actual Ubuntu GPU runtime and actual instrument separately from
-  synthetic transport/UI fixtures.
+CPU tests cover all three browser API paths through an outbound HTTP agent,
+concurrent Stop, no replay, wrong identity/profile, missing responses, process
+readiness/exit/timeout and native RGB encoding. Browser fixture acceptance checks
+visible controls and results. These tests do not establish native Isaac/GPU or
+physical performance. The first field acceptance remains native OT-2 Home and
+position readback, followed by the independent physical run, then paired execution.
 
-The first physical acceptance scope remains OT-2 Home and position readback, with
-left P10 GEN1 and right P300 GEN2 eight-channel nominal visual assets. Tool
-calibration, tip/liquid semantics and qualified collision checks remain separate
-work.
+Nominal pipette geometry does not qualify tool alignment, collision checks or
+liquid handling. Source state remains with each backend.

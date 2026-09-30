@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0 — 2026-09-30
+
+- Add an outbound authenticated device gateway, configured device catalog and replaceable local backend provider. Browser clients no longer enter device connection details in managed application mode.
+- Launch the exact reviewed native Matterix run automatically in the configured Isaac environment. Surface startup, binding errors, native logs and child exit; stop owned child processes on completion/shutdown.
+- Display native RGB frames with run ID, capture time and live/last-frame labels. Missing or failed native imagery stays unavailable; no schematic fallback.
+- Preserve one-shot reviews, durable device-side attempts, ordered operations, independent Stop, and held state on lost results. Cleanup failures retain collected evidence.
+- Provide one-time Mac gateway and Ubuntu site configuration commands and a browser acceptance guide. Runtime paths may be overridden per device for distinct pinned OT-2 and Flex checkouts.
+- Local CPU, HTTP and browser acceptance uses explicit fixtures. Native Ubuntu/GPU imagery and real device execution still require field acceptance.
+
 ## 0.5.2 — 2026-09-30
 
 - Keep all console SiLA requests and paired runs on one persistent asyncio loop. Repeated HTTP checks previously created and closed separate loops, leaving gRPC completion callbacks targeting closed loops. Shut down pending transports before closing the console loop; cancellation still does not confirm a physical stop.

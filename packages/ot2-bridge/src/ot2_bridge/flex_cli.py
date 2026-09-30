@@ -147,6 +147,7 @@ def main():
     console.add_argument("--output", default="bridge-runs")
     console.add_argument("--listen", default="127.0.0.1", help="Explicit private IPv4 for the Ubuntu host")
     console.add_argument("--password-file", help="Private file containing the browser login password (user: bridge)")
+    console.add_argument("--site-config", help="One-time native runtime and outbound gateway configuration")
     console.add_argument("--tailscale", action="store_true", help="Use the existing encrypted Tailscale network")
     args = parser.parse_args()
     try:
@@ -199,8 +200,14 @@ def main():
         else:
             from .flex_console import serve
 
-            serve(args.port, args.output, host=args.listen, password_file=args.password_file,
-                  tailscale=args.tailscale)
+            serve(
+                args.port,
+                args.output,
+                host=args.listen,
+                password_file=args.password_file,
+                tailscale=args.tailscale,
+                site_config=args.site_config,
+            )
     except (ValueError, RuntimeError, OSError) as error:
         parser.exit(2, f"{error}\n")
 

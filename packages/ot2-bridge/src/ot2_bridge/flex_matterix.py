@@ -36,6 +36,8 @@ def main():
     parser.add_argument("--matterix-root", required=True)
     parser.add_argument("--assets-root", required=True)
     parser.add_argument("--serve", action="store_true")
+    parser.add_argument("--ready-file")
+    parser.add_argument("--viewer-dir")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--output", default="flex-sim-result.json")
     # Parse source arguments before importing Isaac (and before initializing its process).
@@ -78,14 +80,17 @@ def main():
 
     async def run():
         for module in (matterix_tasks, matterix_sm, matterix_assets, matterix):
-            if not Path(module.__file__).resolve().is_relative_to(root):
+            if not Path(module.__file__).resolve().is_relative_to(root):  # noqa: ASYNC240 - local provenance check
                 raise ValueError(f"{module.__name__} imported from a different checkout")
         cfg = parse_env_cfg(profile["task"], device=args.device, num_envs=1)
         cfg.terminations.time_out = None
         actions = cfg.workflows[profile["workflow"]]
-        env = gym.make(profile["task"], cfg=cfg).unwrapped
+        env = gym.make(profile["task"], cfg=cfg, render_mode="rgb_array" if args.viewer_dir else None).unwrapped
         try:
             obs, _ = env.reset()
+            from .managed_matterix import NativeViewer, atomic_json
+
+            viewer = NativeViewer(env, args.viewer_dir, plan["binding"]) if args.viewer_dir else None
             runtime = MatterixRuntime(
                 env,
                 StateMachine(num_envs=1, dt=env.step_dt, device=env.device),
@@ -93,6 +98,7 @@ def main():
                 {"asset_name": "ot2" if ot2 else "flex"},
                 timeout=80,
                 is_running=app.is_running,
+                after_step=viewer.capture if viewer else lambda: None,
             )
             adapter = native_adapter(profile, actions, runtime)
             for value in plan["operations"]:
@@ -102,6 +108,10 @@ def main():
                     adapter, binding=plan["binding"], initial_observation=runtime.observe(), timeout=85
                 )
                 server = await service.listen(args.port)
+                if viewer:
+                    viewer.capture()
+                if args.ready_file:
+                    atomic_json(Path(args.ready_file), {"binding": plan["binding"], "port": args.port})
                 print(
                     f"{'OT-2' if ot2 else 'FLEX'} BRIDGE READY 127.0.0.1:{args.port} run={plan['binding']['run_id']}",
                     flush=True,
@@ -110,6 +120,8 @@ def main():
                     while app.is_running():
                         if not runtime.busy:
                             app.update()
+                            if viewer:
+                                viewer.capture()
                         await asyncio.sleep(0.01)
             else:
                 result = {"binding": plan["binding"], "mode": "matterix-only", "status": "completed", "steps": []}
@@ -128,7 +140,7 @@ def main():
                 except (Exception, asyncio.CancelledError) as error:
                     result["status"] = "held"
                     result["error"] = f"{type(error).__name__}: {error}"
-                with Path(args.output).open("x", encoding="utf-8") as output:
+                with Path(args.output).open("x", encoding="utf-8") as output:  # noqa: ASYNC230 - one-shot local report
                     json.dump(result, output, indent=2)
                 print(json.dumps({"status": result["status"], "report": args.output}), flush=True)
                 if result["status"] != "completed":

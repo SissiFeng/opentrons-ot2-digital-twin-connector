@@ -1,0 +1,43 @@
+name: Bridge application
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'packages/ot2-bridge/**'
+      - '.github/workflows/bridge.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/ot2-bridge/**'
+      - '.github/workflows/bridge.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  cpu-application:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          version: '0.9.6'
+      - name: Install test dependencies and local connector fixtures
+        run: |
+          uv python install '${{ matrix.python }}'
+          uv sync --all-extras --python '${{ matrix.python }}'
+          uv pip install './packages/ot2-bridge[sila]'
+      - name: Check Python errors and browser syntax
+        run: |
+          uv run --no-sync ruff check --select F,E9 packages/ot2-bridge
+          node --check packages/ot2-bridge/src/ot2_bridge/web/app.js
+      - name: Test CPU application, wire fixtures, restart and TLS
+        env:
+          PYTHONPATH: packages/ot2-bridge/src
+        run: uv run --no-sync pytest packages/ot2-bridge/tests -q
+      - name: Build standalone distribution
+        run: uv build --directory packages/ot2-bridge

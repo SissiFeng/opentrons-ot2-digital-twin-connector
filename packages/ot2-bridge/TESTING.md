@@ -194,3 +194,28 @@ comparable before validation begins. Supplying an incomplete dependency list is
 not a model qualification; the deployment must declare every input its checks
 rely on. The generic evaluator API remains available for richer path-dependent
 checks.
+
+
+## Deployment and recovery acceptance (0.7.0)
+
+`tests/test_deployment_recovery.py` exercises persistent Hub holds after process
+SIGKILL, legacy interrupted-run import, local owner exclusion, explicit
+reconciliation, token rotation/session fencing, transport-independent profile
+binding, successful rehearsal matching, strict proxy origins, gateway-only
+loopback routing, proxy/redirect rejection, and real local TLS handshakes with
+untrusted-CA and wrong-hostname rejection. All devices/renderers in these tests
+are CPU fixtures; no robot command or Isaac process is involved.
+
+The browser fixture also completed: connector inspection, recorded reconciliation,
+simulation, reviewed linked device run, and refresh restoring the completed run's
+observations. It had no physical device and no native Matterix scene.
+
+Validation on 2026-10-01: package suite **193 passed, 1 skipped** (optional external
+Flex connector wire fixture absent). Final gateway/recovery subset **29 passed**.
+Changed Python files pass the repository's full Ruff rules; all package files pass
+F/E9 checks and JavaScript syntax passes. The package-wide full-rule scan also
+reports nine existing lint findings in unchanged files, outside this change.
+Wheel/sdist build and clean-wheel CLI/startup/journal/packaged-guide smoke checks
+pass. The dedicated Bridge application workflow runs CPU acceptance on Ubuntu
+Python 3.10 and 3.12. These statements do not establish tailnet/Serve, GPU, or
+physical field acceptance; use the deployment and OT-2 guides for those checks.

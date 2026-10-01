@@ -1,7 +1,7 @@
 # OT-2 / Flex bridge
 
 For the **browser-operated Ubuntu application** (automatic native Matterix startup,
-native view, outbound device gateway), start with the [0.6.0 OT-2 test guide](src/ot2_bridge/guides/browser-ot2-test.md).
+native view, outbound device gateway), start with the [0.7.0 OT-2 test guide](src/ot2_bridge/guides/browser-ot2-test.md).
 No Ubuntu-to-Mac SiLA port access is required in this mode. GPU and physical
 acceptance must still be performed in the lab.
 
@@ -199,3 +199,5 @@ for negative controls, native integration and the one-step scope.
 ## OT-2 and physical connector selection (0.4)
 
 The console now defaults to OT-2, with a home/readback first-connection workflow. Flex retains its separate tip-cycle adapter. The UI selects the physical SiLA connector; Matterix is the simulation side. Development connector simulation is CLI-only. See `src/ot2_bridge/guides/ot2-console-first-test.md`. Use `lab-bridge profile --instrument ot2` or `--instrument flex` to create the appropriate profile. Paired OT-2 home/readback records completion and native observations separately; it does not assert calibrated coordinate equivalence.
+
+Deployment, gateway replacement and restart handling: [deployment guide](src/ot2_bridge/guides/deployment.md).

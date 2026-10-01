@@ -1,4 +1,4 @@
-# Browser application: OT-2 first test (0.6.0)
+# Browser application: OT-2 first test (0.7.0)
 
 The browser is only the operator interface. Ubuntu hosts the application and native
 Matterix. The computer wired to the OT-2 runs a small gateway which makes outbound
@@ -8,6 +8,9 @@ The first acceptance is **Home + position readback**, with the left P10 GEN1
 8-channel and right P300 GEN2 8-channel nominal assets. No tip/liquid semantics.
 Actual Ubuntu/GPU rendering and physical paired execution are field acceptance,
 not results established by the CPU/HTTP/browser fixture tests.
+
+For an existing installation, first follow the [upgrade, entry and recovery guide](deployment.md).
+Stop active work and preserve the existing output/ledgers before upgrading.
 
 ## 1. Mac: update and create a local robot connection
 
@@ -131,12 +134,14 @@ Open `http://100.119.227.39:8088/` and refresh once after the update.
    Matterix must become ready before device execution begins. Each paired step
    completes on both sides before the next step. Elapsed times remain independent.
 
-A simulation and the later physical run have different run IDs with the same
-profile hash and workflow. Sim success never starts the device automatically.
+A simulation and later physical run have different run IDs and full plan hashes.
+The reviewed workflow and qualified device/model hashes match; the UI displays
+the successful rehearsal reference and records it in the later report. Sim success never starts the device automatically.
 Reloading the browser during an active run reconnects to the job; it does not
 replay it. The application currently allows one active run at a time.
 
-For every run, retain `browser-runs/<run-id>/plan.json`, `report.json` and, when
+Keep the whole output directory including `application.sqlite3`, plus both gateway
+attempt-ledger directories (see the deployment guide). For every run, retain `browser-runs/<run-id>/plan.json`, `report.json` and, when
 simulation was selected, `matterix.log`, `native-ready.json`, and `viewer/`.
 Native frames are captured up to twice per second; the browser refreshes about
 once per second. This is not a time-synchronized video record. `Last native frame · not live` means the process stopped or the
@@ -149,8 +154,9 @@ frame is stale. Missing imagery is explicitly unavailable. Firmware coordinates
   Ubuntu URL. No run is automatically resumed or retried after connection loss.
 - **Missing gateway response / unknown result:** preserve the report and inspect
   the physical machine. The hub/gateway hold further operations. Reconcile with
-  the local operator before restarting both application and gateway and reviewing
-  a new run. Restarting is not evidence that the previous motion stopped.
+  the local operator. Restart the gateway if needed, Check connector, then record
+  the inspection in the browser reconciliation panel before reviewing a new run.
+  Restarting the Hub preserves the hold; it is not evidence that motion stopped.
 - **Matterix failed/exited:** open **Native runtime log**. Check the captured
   Python executable, pinned clean checkouts, assets, GPU/Isaac environment and
   renderer. Native failures never switch to a synthetic simulation.
@@ -176,7 +182,8 @@ The hub has no SiLA dependency. A device-side provider can be selected once usin
 configured profile and supplies async `inspect`, `begin(plan)`,
 `snapshot(revision)`, `execute(Operation)`, `stop`, and `close`. It returns the
 existing Observation/Outcome contracts and owns physical identity validation.
-The gateway still enforces exact configured profile, ordered reviewed operations,
+The gateway still enforces the qualified device/model/calibration profile (only
+local host/port may differ), ordered reviewed operations,
 local exclusion and no replay. Current OT-2/Flex profile fields retain the legacy
 SiLA binding shape; a replacement provider may map/ignore transport-specific
 fields, but must validate its own real device identity before any motion.

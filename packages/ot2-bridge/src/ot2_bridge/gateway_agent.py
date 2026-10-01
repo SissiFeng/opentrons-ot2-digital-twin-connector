@@ -5,12 +5,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import importlib
-import json
 import os
 from pathlib import Path
 import time
-import urllib.request
-from urllib.parse import urlsplit
 
 from .flex_cli import connected, control, read_profile
 from .flex import FlexAdapter
@@ -18,7 +15,8 @@ from .ot2_console import OT2HomeAdapter
 from .flex_session import device_session
 from .gateway import private_secret
 from .instruments import is_ot2, validate_plan, validate_profile
-from .network import is_tailscale_address, private_ipv4
+from .network import hub_endpoint, hub_json
+from .application_records import qualified_profile
 from .wire import fingerprint, operation_from_dict, plain
 
 
@@ -98,11 +96,24 @@ class DeviceExecutor:
                 raise ValueError("Command expired while waiting; no device command dispatched")
             if kind == "inspect":
                 return await self.backend.inspect()
+            if kind == "reconcile":
+                if self.plan:
+                    raise ValueError(
+                        "Gateway still owns an active run; wait for completion and restart it before reconciliation"
+                    )
+                if (
+                    not isinstance(payload, dict)
+                    or not isinstance(payload.get("note"), str)
+                    or len(payload["note"].strip()) < 8
+                ):
+                    raise ValueError("Operator reconciliation note required")
+                self.fault = self.stop_requested = False
+                return {"recorded": True, "physical_state_authority": "operator and connector"}
             if kind == "begin":
                 if self.plan or self.fault:
                     raise ValueError("Reconcile the active/uncertain gateway run before restarting")
                 plan = validate_plan(payload)
-                if fingerprint(plan["profile"]) != fingerprint(self.profile):
+                if fingerprint(qualified_profile(plan["profile"])) != fingerprint(qualified_profile(self.profile)):
                     raise ValueError("Reviewed profile differs from the gateway's local configuration")
                 self.guard = device_session(self.profile, run_id=plan["binding"]["run_id"])
                 self.guard.__enter__()
@@ -147,40 +158,25 @@ class DeviceExecutor:
             self.guard = self.plan = None
 
 
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, *args, **kwargs):
-        raise ValueError("Gateway redirects are not allowed")
-
-
 def hub_url(value):
-    url = urlsplit(value)
-    host = private_ipv4(url.hostname)
-    if url.scheme != "http" or url.username or url.password or url.path not in ("", "/") or url.query or url.fragment:
-        raise ValueError("Use the printed http://IP:port console URL")
-    if not (host.startswith("127.") or is_tailscale_address(host)):
-        raise ValueError("Gateway requires localhost or the existing encrypted Tailscale network")
-    if not url.port:
-        raise ValueError("Console port is required")
-    return f"http://{host}:{url.port}"
+    return hub_endpoint(value)[0]
 
 
-async def serve_gateway(hub, profile, secret, executor):
-    # Local/Tailscale control traffic must not traverse environment HTTP proxies.
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+async def serve_gateway(hub, profile, secret, executor, gateway_id="default"):
 
     async def post(action, body):
         def send():
-            request = urllib.request.Request(
-                hub + "/gateway/" + action,
-                data=json.dumps(body, allow_nan=False).encode(),
-                headers={
+            return hub_json(
+                hub,
+                "/gateway/" + action,
+                body,
+                {
                     "Content-Type": "application/json",
                     "Authorization": "Bearer " + secret,
                     "X-Device-ID": profile["device_id"],
+                    "X-Gateway-ID": gateway_id,
                 },
             )
-            with opener.open(request, timeout=25) as response:
-                return json.loads(response.read(1_000_001))
 
         return await asyncio.to_thread(send)
 
@@ -223,6 +219,7 @@ def main():
     parser.add_argument("--hub", required=True)
     parser.add_argument("--profile", required=True)
     parser.add_argument("--token-file", required=True)
+    parser.add_argument("--gateway-id", default="default", help="Installation ID assigned by the Hub operator")
     parser.add_argument("--ledger", default=str(Path.home() / ".local/state/matterix-gateway"))
     parser.add_argument(
         "--provider", default="sila", help="Local module:factory(profile) implementing the backend contract"
@@ -238,7 +235,7 @@ def main():
             module, name = args.provider.split(":", 1)
             backend = getattr(importlib.import_module(module), name)(profile)
         executor = DeviceExecutor(profile, backend, args.ledger)
-        await serve_gateway(hub, profile, secret, executor)
+        await serve_gateway(hub, profile, secret, executor, args.gateway_id)
 
     try:
         asyncio.run(run())

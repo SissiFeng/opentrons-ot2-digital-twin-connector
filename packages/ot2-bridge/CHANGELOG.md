@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0 — 2026-10-01
+
+- Add configured MagicDNS origins, verified HTTPS gateway requests, an explicitly trusted loopback HTTPS proxy mode and a gateway-only localhost listener for colocated deployment. Browser authentication, exact Host/Origin checks and distinct gateway credentials remain enforced.
+- Persist Hub run events, command intent/results and held sessions in SQLite, with single-process output ownership. Restart holds unfinished work instead of resetting to idle. Import interrupted legacy output and record explicit operator reconciliation without changing previous outcomes.
+- Issue installation-specific gateway tokens on the Hub. Rotation invalidates previous sessions; physical commands already delivered still require onsite reconciliation. Preserve device-side attempt ledgers.
+- Separate qualified device/model identity from gateway-local host/port. Record stable workflow and qualified-profile hashes plus an explicit successful rehearsal reference. An optional site gate requires a matching simulation before hardware runs; each physical run still needs review and authorization.
+- Correct deployment/state ownership documentation and provide tested CLI paths for direct, same-host and HTTPS-proxy configurations. No automatic SSH management, native GPU or physical acceptance is claimed.
+
 ## 0.6.0 — 2026-09-30
 
 - Add an outbound authenticated device gateway, configured device catalog and replaceable local backend provider. Browser clients no longer enter device connection details in managed application mode.

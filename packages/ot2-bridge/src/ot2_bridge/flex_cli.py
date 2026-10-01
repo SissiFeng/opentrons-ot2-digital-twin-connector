@@ -149,6 +149,15 @@ def main():
     console.add_argument("--password-file", help="Private file containing the browser login password (user: bridge)")
     console.add_argument("--site-config", help="One-time native runtime and outbound gateway configuration")
     console.add_argument("--tailscale", action="store_true", help="Use the existing encrypted Tailscale network")
+    console.add_argument("--public-url", help="Exact HTTP MagicDNS origin, or HTTPS origin behind a loopback proxy")
+    console.add_argument(
+        "--trusted-proxy-loopback",
+        action="store_true",
+        help="Trust a local HTTPS proxy; requires loopback bind and browser password",
+    )
+    console.add_argument(
+        "--local-gateway-port", type=int, help="Gateway-only loopback listener alongside a Tailscale console"
+    )
     args = parser.parse_args()
     try:
         if args.command == "profile":
@@ -207,6 +216,9 @@ def main():
                 password_file=args.password_file,
                 tailscale=args.tailscale,
                 site_config=args.site_config,
+                public_url=args.public_url,
+                trusted_proxy_loopback=args.trusted_proxy_loopback,
+                local_gateway_port=args.local_gateway_port,
             )
     except (ValueError, RuntimeError, OSError) as error:
         parser.exit(2, f"{error}\n")

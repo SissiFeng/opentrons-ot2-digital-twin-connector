@@ -17,6 +17,7 @@ import zipfile
 from urllib.parse import urlsplit, parse_qs
 
 from .gateway import GatewayBroker, GatewayAdapter
+from .application_records import ApplicationRecords, plan_identity
 from .managed_matterix import ManagedMatterix
 from .flex_runner import run_plan
 from .remote import RemoteSimulation
@@ -25,7 +26,7 @@ from .instruments import make_plan, profile_template, validate_profile
 from .flex_bundle import bundle_bytes
 from .flex_cli import control, run_connected
 from .wire import fingerprint
-from .network import private_ipv4, is_tailscale_address
+from .network import private_ipv4, is_tailscale_address, hub_endpoint
 
 
 class ConsoleRuntime:
@@ -84,23 +85,38 @@ class ConsoleState:
     def __init__(self, output, site=None):
         self.token = secrets.token_urlsafe(32)
         self.output = Path(output).resolve()
+        self.records = ApplicationRecords(self.output)
         self.lock = threading.Lock()
         self.review = None
-        self.job = {"status": "idle", "events": []}
+        self.job = self.records.latest_job()
+        self.worker = None
         self.busy = False
         self.stopping = False
         self.active_profile = None
         self.stop_requested = threading.Event()
         self.managed = site is not None
-        self.gateways = GatewayBroker((site or {}).get("gateways", []))
-        self.native = ManagedMatterix((site or {}).get("matterix"), (site or {}).get("matterix_by_device"))
-        self.runtime = ConsoleRuntime()
+        self.require_rehearsal = (site or {}).get("require_rehearsal", False)
+        if type(self.require_rehearsal) is not bool:
+            self.records.close()
+            raise ValueError("require_rehearsal must be true or false")
+        try:
+            self.gateways = GatewayBroker((site or {}).get("gateways", []), self.records)
+            self.native = ManagedMatterix((site or {}).get("matterix"), (site or {}).get("matterix_by_device"))
+            self.runtime = ConsoleRuntime()
+        except BaseException:
+            self.records.close()
+            raise
 
-    def launch(self, mode, hardware, reviewed_fingerprint):
+    def recovery(self):
+        return [job for job in self.records.jobs() if job.get("recovery_required")]
+
+    def launch(self, mode, hardware, reviewed_fingerprint, rehearsal_run_id=None):
         """Consume a reviewed plan once; serialize this console's device actions."""
         with self.lock:
             if self.busy or self.stopping or not self.review:
                 raise ValueError("Review the plan first; an active run cannot be replaced")
+            if self.recovery():
+                raise ValueError("Reconcile the held run before starting another run")
             if fingerprint(self.review) != reviewed_fingerprint:
                 raise ValueError("Reviewed plan changed")
             plan = self.review
@@ -110,8 +126,16 @@ class ConsoleState:
                 raise ValueError("The console connects to physical SiLA hardware; development simulation is CLI-only")
             if mode != "sim-only":
                 validate_profile(plan["profile"], hardware=True)
+                if rehearsal_run_id and self.records.rehearsal(plan, rehearsal_run_id) != rehearsal_run_id:
+                    raise ValueError("Rehearsal must be a completed simulation of this workflow and qualified profile")
+                if self.require_rehearsal and not rehearsal_run_id:
+                    raise ValueError("This site requires a completed matching rehearsal before hardware execution")
+            elif rehearsal_run_id:
+                raise ValueError("A simulation cannot reference an earlier rehearsal as hardware authorization")
             if self.managed:
-                self.gateways.match(plan["profile"])
+                key = self.gateways.match(plan["profile"])
+                if mode != "sim-only" and self.gateways.devices[key]["fault"]:
+                    raise ValueError(self.gateways.devices[key]["fault"])
             run_dir = self.output / plan["binding"]["run_id"]
             run_dir.mkdir(parents=True, exist_ok=False)
             (run_dir / "plan.json").write_text(json.dumps(plan, indent=2))
@@ -126,11 +150,15 @@ class ConsoleState:
                 "output": str(run_dir),
                 "profile": plan["profile"],
                 "mode": mode,
+                **plan_identity(plan),
+                "rehearsal_run_id": rehearsal_run_id,
             }
+            self.records.save_job(self.job)
 
         def emit(event):
             with self.lock:
                 self.job["events"].append(event)
+                self.records.save_job(self.job)
 
         def work():
             try:
@@ -143,6 +171,7 @@ class ConsoleState:
                 )
             except Exception as error:
                 result = {"status": "held", "error": f"{type(error).__name__}: {error}"}
+            result.update(**plan_identity(plan), rehearsal_run_id=rehearsal_run_id)
             try:
                 (run_dir / "report.json").write_text(json.dumps(result, indent=2))
             except OSError as error:
@@ -152,9 +181,41 @@ class ConsoleState:
                 self.active_profile = None
                 self.job["status"] = result["status"]
                 self.job["report"] = result
+                self.job["recovery_required"] = result["status"] != "completed"
+                self.records.save_job(self.job)
+                if self.managed and mode != "sim-only" and result["status"] != "completed":
+                    self.gateways.hold(
+                        plan["profile"]["device_id"],
+                        "Run held; verify the device and record reconciliation before a new run.",
+                    )
 
-        threading.Thread(target=work, daemon=True).start()
+        self.worker = threading.Thread(target=work, daemon=True)
+        self.worker.start()
         return {"run_id": plan["binding"]["run_id"]}
+
+    async def reconcile(self, profile, note, confirmed_idle):
+        if confirmed_idle is not True or not isinstance(note, str) or not 8 <= len(note.strip()) <= 2000:
+            raise ValueError(
+                "Confirm the device/native process is idle and record an inspection note (8-2000 characters)"
+            )
+        key = profile["device_id"]
+        physical_hold = any(job["profile"]["device_id"] == key and job["mode"] != "sim-only" for job in self.recovery())
+        if self.native.process and self.native.process.poll() is None:
+            raise ValueError("The owned Matterix process is still running")
+        if self.managed:
+            self.gateways.match(profile)
+            physical_hold = physical_hold or bool(self.gateways.devices[key]["fault"])
+        if self.managed and physical_hold:
+            if not self.gateways.devices[key]["inspected"]:
+                raise ValueError("Check connector before recording reconciliation")
+            await self.gateways.request(key, "reconcile", {"note": note.strip()}, timeout=20)
+            self.gateways.reconcile(key, note.strip())
+        else:
+            self.records.reconcile(key, note.strip())
+        with self.lock:
+            self.job = self.records.latest_job()
+            self.review = None
+        return {"message": "Reconciliation recorded. Previous outcomes stay unchanged; review a new run."}
 
     async def run_managed(self, plan, mode, directory, emit):
         real = GatewayAdapter(self.gateways, plan) if mode != "sim-only" else None
@@ -201,13 +262,38 @@ class ConsoleState:
         return await self.gateways.request(key, action, timeout=35 if action == "inspect" else 120)
 
 
-def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale=False, site_config=None):
+def make_server(
+    port,
+    output,
+    *,
+    host="127.0.0.1",
+    password_file=None,
+    tailscale=False,
+    site_config=None,
+    public_url=None,
+    trusted_proxy_loopback=False,
+    local_gateway_port=None,
+):
     host = private_ipv4(host)
     remote = not host.startswith("127.")
     if tailscale and not is_tailscale_address(host):
         raise ValueError("--tailscale requires binding to this machine's 100.64.0.0/10 Tailscale IPv4")
     if remote and not (password_file and tailscale):
         raise ValueError("A network console requires --password-file and --tailscale")
+    public_origin = hub_endpoint(public_url)[0] if public_url else None
+    if trusted_proxy_loopback and (
+        remote or not password_file or not public_origin or not public_origin.startswith("https://")
+    ):
+        raise ValueError("Trusted proxy requires a loopback listener, password file and exact HTTPS public URL")
+    if public_origin and not trusted_proxy_loopback:
+        _, _, address, public_port = hub_endpoint(public_origin)
+        if public_origin.startswith("https:") or address != host or public_port != port:
+            raise ValueError(
+                "Direct public URL must resolve to the listener and use its HTTP port; "
+                "HTTPS requires --trusted-proxy-loopback"
+            )
+    if local_gateway_port is not None and not site_config:
+        raise ValueError("A separate localhost gateway listener requires --site-config")
     expected_auth = None
     if password_file:
         password_path = Path(password_file)
@@ -247,15 +333,23 @@ def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale
 
         def trusted(self, *, api=False):
             authority = f"{host}:{self.server.server_port}"
-            if self.headers.get("Host") != authority:
+            local_origin = f"http://127.0.0.1:{self.server.server_port}"
+            origins = {local_origin} if getattr(self.server, "gateway_only", False) else {f"http://{authority}"}
+            if public_origin and not getattr(self.server, "gateway_only", False):
+                origins.add(public_origin)
+            matched = [origin for origin in origins if urlsplit(origin).netloc == self.headers.get("Host")]
+            if not matched:
                 raise ValueError("Use the printed console URL")
             origin = self.headers.get("Origin")
-            if origin is not None and origin != f"http://{authority}":
+            if origin is not None and origin not in (origins if trusted_proxy_loopback else matched):
                 raise ValueError("Cross-origin requests are not allowed")
             if api and not secrets.compare_digest(self.headers.get("X-Bridge-Token", ""), state.token):
                 raise ValueError("Console session token is missing")
 
         def authenticated(self):
+            if getattr(self.server, "gateway_only", False):
+                self.respond(404, {"error": "Gateway-only listener"})
+                return False
             if tailscale and not is_tailscale_address(self.client_address[0]):
                 self.respond(403, {"error": "Connect through Tailscale"})
                 return False
@@ -292,6 +386,11 @@ def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale
                             "managed": state.managed,
                             "devices": state.gateways.catalog(),
                             "native_configured": bool(state.native.config or state.native.runtime_by_device),
+                            "require_rehearsal": state.require_rehearsal,
+                            "recovery": [
+                                {"run_id": job["run_id"], "device_id": job["profile"]["device_id"], "mode": job["mode"]}
+                                for job in state.recovery()
+                            ],
                         },
                     )
                 elif self.path == "/api/native":
@@ -317,10 +416,16 @@ def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale
         def gateway_post(self):
             try:
                 self.trusted()
-                if tailscale and not is_tailscale_address(self.client_address[0]):
+                if (
+                    tailscale
+                    and not getattr(self.server, "gateway_only", False)
+                    and not is_tailscale_address(self.client_address[0])
+                ):
                     raise ValueError("Connect through Tailscale")
                 key = self.headers.get("X-Device-ID", "")
-                state.gateways.authorize(key, self.headers.get("Authorization", ""))
+                credential = state.gateways.authorize(
+                    key, self.headers.get("Authorization", ""), self.headers.get("X-Gateway-ID", "default")
+                )
                 if self.headers.get_content_type() != "application/json":
                     raise ValueError("JSON required")
                 size = int(self.headers.get("Content-Length", "0"))
@@ -328,11 +433,11 @@ def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale
                     raise ValueError("Invalid request size")
                 data = json.loads(self.rfile.read(size))
                 if self.path == "/gateway/register":
-                    value = state.gateways.register(key, data["profile"])
+                    value = state.gateways.register(key, data["profile"], credential)
                 elif self.path == "/gateway/poll":
-                    value = {"command": state.gateways.poll(key, data["session"])}
+                    value = {"command": state.gateways.poll(key, data["session"], credential=credential)}
                 elif self.path == "/gateway/result":
-                    state.gateways.result(key, data["session"], data["result"])
+                    state.gateways.result(key, data["session"], data["result"], credential)
                     value = {"accepted": True}
                 else:
                     raise ValueError("Unknown gateway route")
@@ -376,13 +481,32 @@ def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale
                             "fingerprint": fingerprint(plan),
                             "backend_bundle_directory": str(folder),
                             "serve_command": f"cd {shlex.quote(str(folder))} && sh serve-sim.sh",
+                            **plan_identity(plan),
+                            "rehearsal_run_id": state.records.rehearsal(plan),
                         },
                     )
                 elif self.path == "/api/run":
                     with state.lock:
                         if state.review is None or fingerprint(state.review) != data["fingerprint"]:
                             raise ValueError("Reviewed plan changed; review and export again")
-                    self.respond(202, state.launch(data["mode"], data["hardware"], data["fingerprint"]))
+                    self.respond(
+                        202,
+                        state.launch(data["mode"], data["hardware"], data["fingerprint"], data.get("rehearsal_run_id")),
+                    )
+                elif self.path == "/api/reconcile":
+                    profile = validate_profile(data["profile"])
+                    with state.lock:
+                        if state.busy or state.stopping:
+                            raise ValueError("Wait for pending operations before reconciliation")
+                        state.busy = True
+                    try:
+                        self.respond(
+                            200,
+                            state.runtime.run(state.reconcile(profile, data.get("note"), data.get("confirmed_idle"))),
+                        )
+                    finally:
+                        with state.lock:
+                            state.busy = False
                 elif self.path in ("/api/inspect", "/api/home", "/api/stop"):
                     action = self.path.rsplit("/", 1)[1]
                     profile = validate_profile(data["profile"])
@@ -393,6 +517,8 @@ def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale
                             raise ValueError("Wait for the pending Stop response")
                         if state.busy and action != "stop":
                             raise ValueError("A run is active; only Stop is available")
+                        if action == "home" and state.recovery():
+                            raise ValueError("Reconcile the held run before homing")
                         if action == "stop":
                             if state.active_profile is not None and fingerprint(profile) != fingerprint(
                                 state.active_profile
@@ -435,17 +561,39 @@ def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale
             try:
                 super().server_close()
             finally:
+                if getattr(self, "local_gateway", None):
+                    self.local_gateway.shutdown()
+                    self.local_gateway.server_close()
+                    self.local_gateway = None
                 state.gateways.close()
                 if not state.runtime.closing:
                     state.runtime.run(state.native.close())
                 state.runtime.close()
+                if state.worker:
+                    state.worker.join(timeout=15)
+                if state.worker and state.worker.is_alive():
+                    raise RuntimeError(
+                        "Run cleanup remains active; retain the Hub journal and reconcile before restarting"
+                    )
+                state.records.close()
 
+    server = None
     try:
         server = ConsoleServer((host, port), Handler)
+        server.local_gateway = None
+        if local_gateway_port is not None:
+            local = ThreadingHTTPServer(("127.0.0.1", local_gateway_port), Handler)
+            local.gateway_only = True
+            server.local_gateway = local
+            server.gateway_url = f"http://127.0.0.1:{local.server_port}"
+            threading.Thread(target=local.serve_forever, daemon=True).start()
     except BaseException:
+        if server:
+            ThreadingHTTPServer.server_close(server)
         state.runtime.close()
+        state.records.close()
         raise
-    server.url = f"http://{host}:{server.server_port}"
+    server.url = public_origin or f"http://{host}:{server.server_port}"
     server.state = state
     return server
 
@@ -453,6 +601,8 @@ def make_server(port, output, *, host="127.0.0.1", password_file=None, tailscale
 def serve(port=8088, output="bridge-runs", **kwargs):
     server = make_server(port, output, **kwargs)
     print(f"Bridge console: {server.url}", flush=True)
+    if getattr(server, "gateway_url", None):
+        print(f"Same-host gateway URL: {server.gateway_url}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

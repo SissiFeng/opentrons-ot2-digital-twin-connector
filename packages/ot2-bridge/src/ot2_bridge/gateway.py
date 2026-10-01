@@ -12,6 +12,8 @@ import time
 import uuid
 
 from .instruments import validate_plan, validate_profile
+from .application_records import qualified_profile
+from .gateway_credentials import credential_digest, read_registry
 from .wire import fingerprint, plain, observation_from_dict, outcome_from_dict
 
 
@@ -30,13 +32,14 @@ class GatewayBroker:
 
     All mailbox mutations use one lock. HTTP workers poll this mailbox while the
     console's asyncio loop awaits futures. A missing response latches uncertainty
-    until the application is restarted after operator reconciliation.
+    across restarts until an operator explicitly records reconciliation.
     """
 
-    def __init__(self, entries=()):
+    def __init__(self, entries=(), records=None):
         self.condition = threading.Condition()
         self.devices = {}
         self.closed = False
+        self.records = records
         for entry in entries:
             profile = validate_profile(json.loads(Path(entry["profile_file"]).read_text()), hardware=True)
             key = profile["device_id"]
@@ -45,26 +48,69 @@ class GatewayBroker:
             self.devices[key] = dict(
                 profile=profile,
                 name=entry.get("name", key),
-                secret=private_secret(entry["token_file"]),
+                credentials=entry,
+                credential=None,
                 session=None,
                 seen=0,
                 pending={},
-                fault="",
+                fault=records.device(key)["fault"] if records else "",
+                inspected=False,
             )
+            read_registry(entry)
 
-    def authorize(self, key, bearer):
-        item = self.devices.get(key)
-        if item is None or not secrets.compare_digest(bearer, "Bearer " + item["secret"]):
-            raise ValueError("Gateway credential rejected")
+    def authorize(self, key, bearer, gateway_id="default"):
+        with self.condition:
+            item = self.devices.get(key)
+            if item is None:
+                raise ValueError("Gateway credential rejected")
+            self._credential_current(key)
+            registry = read_registry(item["credentials"])
+            expected = registry.get(gateway_id)
+            if (
+                not bearer.startswith("Bearer ")
+                or not expected
+                or not secrets.compare_digest(credential_digest(bearer[7:]), expected)
+            ):
+                raise ValueError("Gateway credential rejected")
+            return (gateway_id, expected)
+
+    def hold(self, key, reason):
+        with self.condition:
+            self.devices[key]["fault"] = reason
+            self.devices[key]["inspected"] = False
+            if self.records:
+                self.records.hold(key, reason)
+
+    def _credential_current(self, key):
+        d = self.devices[key]
+        credential = d["credential"]
+        if credential and read_registry(d["credentials"]).get(credential[0]) != credential[1]:
+            d["session"], d["seen"], d["credential"] = None, 0, None
+            self.hold(key, "Gateway credential replaced/revoked. Stop the old gateway and reconcile before a new run.")
+            for item in d["pending"].values():
+                if not item["future"].done():
+                    item["future"].set_exception(RuntimeError(d["fault"]))
+            self.condition.notify_all()
+
+    def reconcile(self, key, note):
+        with self.condition:
+            d = self.devices[key]
+            if d["pending"] or not d["inspected"]:
+                raise ValueError("Wait for pending commands and Check connector before recording reconciliation")
+            if self.records:
+                self.records.reconcile(key, note)
+            d["fault"] = ""
 
     def catalog(self):
         with self.condition:
+            for key in self.devices:
+                self._credential_current(key)
             return [
                 dict(
                     id=key,
                     name=d["name"],
                     profile=d["profile"],
-                    online=time.monotonic() - d["seen"] < 35,
+                    online=bool(d["session"]) and time.monotonic() - d["seen"] < 35,
                     fault=d["fault"],
                 )
                 for key, d in self.devices.items()
@@ -76,29 +122,41 @@ class GatewayBroker:
             raise ValueError("Select the configured device profile; browser binding edits are not accepted")
         return profile["device_id"]
 
-    def register(self, key, profile):
+    def register(self, key, profile, credential=None):
+        validate_profile(profile, hardware=True)
         with self.condition:
             d = self.devices[key]
-            self.match(profile)
+            self._credential_current(key)
+            if fingerprint(qualified_profile(profile)) != fingerprint(qualified_profile(d["profile"])):
+                raise ValueError("Gateway device/model/calibration profile differs from the configured profile")
             if profile["device_id"] != key:
                 raise ValueError("Credential belongs to another device")
             if d["session"] and time.monotonic() - d["seen"] < 35:
                 raise ValueError("A gateway session is already online")
-            if d["pending"] or d["fault"]:
-                raise ValueError("Reconcile the interrupted run and restart the application before reconnecting")
+            if d["session"]:
+                self.hold(key, "Previous gateway disconnected. Verify its commands have ended before reconciliation.")
+            if d["pending"]:
+                raise ValueError("Wait for the interrupted request; reconcile before a new run")
+            if credential and read_registry(d["credentials"]).get(credential[0]) != credential[1]:
+                raise ValueError("Gateway credential was revoked")
             d["session"] = secrets.token_urlsafe(32)
+            d["credential"] = credential
+            d["inspected"] = False
             d["seen"] = time.monotonic()
             return {"session": d["session"]}
 
-    def _session(self, key, session):
+    def _session(self, key, session, credential=None):
+        self._credential_current(key)
         d = self.devices[key]
         if self.closed or not session or not secrets.compare_digest(session, d["session"] or ""):
             raise ValueError("Gateway session is no longer active")
+        if credential is not None and credential != d["credential"]:
+            raise ValueError("Gateway session belongs to another installation")
         return d
 
-    def poll(self, key, session, wait=15):
+    def poll(self, key, session, wait=15, credential=None):
         with self.condition:
-            d = self._session(key, session)
+            d = self._session(key, session, credential)
             d["seen"] = time.monotonic()
             deadline = time.monotonic() + wait
             while not self.closed:
@@ -109,20 +167,37 @@ class GatewayBroker:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     break
-                self.condition.wait(remaining)
-                self._session(key, session)
+                self.condition.wait(min(remaining, 1))
+                self._session(key, session, credential)
             d["seen"] = time.monotonic()
             return None
 
-    def result(self, key, session, data):
+    def result(self, key, session, data, credential=None):
         with self.condition:
-            d = self._session(key, session)
+            d = self._session(key, session, credential)
             item = d["pending"].get(data["id"])
             if not item or not item["delivered"] or item["future"].done():
                 raise ValueError("Result is late, duplicate or unknown; no operation will be replayed")
             if set(data) != {"id", "value", "error"}:
                 raise ValueError("Invalid gateway result")
+            if self.records:
+                self.records.result(key, item["command"], data)
+            if item["command"]["kind"] == "inspect" and not data["error"]:
+                value = data["value"]
+                if (
+                    not isinstance(value, dict)
+                    or value.get("server_uuid") != d["profile"]["real"]["server_uuid"]
+                    or value.get("is_simulating") is not False
+                ):
+                    self.hold(key, "Connector identity or physical mode differs; reconciliation rejected")
+                    item["future"].set_exception(ValueError(d["fault"]))
+                    return
+                d["inspected"] = True
             if data["error"]:
+                if item["command"]["kind"] != "inspect":
+                    self.hold(
+                        key, "Gateway command failed; verify the physical outcome and reconcile before a new run."
+                    )
                 item["future"].set_exception(RuntimeError(str(data["error"])))
             else:
                 item["future"].set_result(data["value"])
@@ -132,9 +207,10 @@ class GatewayBroker:
         command_id = str(uuid.uuid4())
         with self.condition:
             d = self.devices[key]
-            if self.closed or time.monotonic() - d["seen"] >= 35:
+            self._credential_current(key)
+            if self.closed or not d["session"] or time.monotonic() - d["seen"] >= 35:
                 raise RuntimeError("Device gateway is offline; start it on the device-side computer")
-            if d["fault"] and kind not in ("stop", "inspect", "finish"):
+            if d["fault"] and kind not in ("stop", "inspect", "finish", "reconcile"):
                 raise RuntimeError(d["fault"])
             d["pending"][command_id] = dict(
                 future=future,
@@ -146,12 +222,18 @@ class GatewayBroker:
                     "expires_at": time.time() + timeout,
                 },
             )
+            if self.records:
+                try:
+                    self.records.intent(key, d["pending"][command_id]["command"])
+                except BaseException:
+                    d["pending"].pop(command_id)
+                    raise
             self.condition.notify_all()
         try:
             return await asyncio.wait_for(asyncio.wrap_future(future), timeout)
         except (asyncio.TimeoutError, asyncio.CancelledError):
             with self.condition:
-                d["fault"] = "Gateway response missing: physical outcome unknown. Reconcile before a new run."
+                self.hold(key, "Gateway response missing: physical outcome unknown. Reconcile before a new run.")
             raise
         finally:
             with self.condition:

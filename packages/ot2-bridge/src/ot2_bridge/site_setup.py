@@ -39,8 +39,39 @@ def main():
     native.add_argument("--assets-root")
     native.add_argument("--listen", default="100.119.227.39")
     native.add_argument("--output", help="New site config path; existing files are preserved")
+    native.add_argument(
+        "--require-rehearsal",
+        action="store_true",
+        help="Require a matching completed sim run before hardware execution",
+    )
+    credential = sub.add_parser("gateway-credential", help="Issue/rotate one installation's gateway token on the Hub")
+    credential.add_argument("--site-config", required=True)
+    credential.add_argument("--device-id", required=True)
+    credential.add_argument("--gateway-id", required=True)
+    credential.add_argument("--token-output", required=True)
+    credential.add_argument("--replace", action="store_true", help="Revoke all previous tokens for this device")
+    credential.add_argument("--confirm-old-gateway-stopped", action="store_true")
     args = parser.parse_args()
-    if args.command == "device":
+    if args.command == "gateway-credential":
+        from .gateway_credentials import issue
+
+        if args.replace and not args.confirm_old_gateway_stopped:
+            parser.error("Stop the old gateway, verify the device is idle, then pass --confirm-old-gateway-stopped")
+        site = json.loads(Path(args.site_config).read_text())
+        entries = [
+            entry
+            for entry in site["gateways"]
+            if json.loads(Path(entry["profile_file"]).read_text())["device_id"] == args.device_id
+        ]
+        if len(entries) != 1:
+            parser.error("Select one configured device ID")
+        issue(entries[0], args.gateway_id, args.token_output, replace=args.replace)
+        print(f"Gateway credential saved privately: {args.token_output}. Installation ID: {args.gateway_id}.")
+        print("Transfer only this token to the new gateway. Keep the Hub journal and the old gateway ledgers.")
+        print(
+            "After a replacement, Check connector and record reconciliation in the browser before reviewing a new run."
+        )
+    elif args.command == "device":
         profile = read_profile(args.profile) if args.profile else profile_template(args.instrument)
         if not is_ot2(profile) and not args.profile:
             parser.error("Flex requires --profile with qualified coordinates and pipette geometry")
@@ -67,6 +98,7 @@ def main():
         profile = validate_profile(json.loads(profile_path.read_text()), hardware=True)
         private_secret(device_root / "gateway-token")
         config = {
+            "require_rehearsal": args.require_rehearsal,
             "matterix": {
                 "python": sys.executable,
                 "matterix_root": str(Path(args.matterix_root or root / "Matterix-Internal").absolute()),

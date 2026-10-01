@@ -1,0 +1,148 @@
+{
+  "binding": {
+    "schema": "ot2.session/1",
+    "device_id": "ot2",
+    "run_id": "demo-run",
+    "mode": "native-smoke-synthetic-peer",
+    "configuration_revision": "demo/1",
+    "profile_sha256": "66835224adbdb3b432bae738d1ebfda2438a3ebc856c59432c00fdc97c3dbd5e",
+    "matterix_revision": "8d70c1977ed26249b6f5e47644d5a84a44a4d003"
+  },
+  "operations": [
+    {
+      "run_id": "demo-run",
+      "operation_id": "1",
+      "device_id": "ot2",
+      "action": "home",
+      "parameters": {
+        "axes": "XYZABC"
+      },
+      "schema": "ot2.client/1"
+    },
+    {
+      "run_id": "demo-run",
+      "operation_id": "2",
+      "device_id": "ot2",
+      "action": "pick_up_tip",
+      "parameters": {
+        "mount": "LEFT",
+        "channels": 1,
+        "slot": "1",
+        "well": "A1",
+        "offset": [
+          0,
+          0,
+          0
+        ],
+        "tip_length_mm": 50,
+        "speed": 20
+      },
+      "schema": "ot2.client/1"
+    },
+    {
+      "run_id": "demo-run",
+      "operation_id": "3",
+      "device_id": "ot2",
+      "action": "move_to_well",
+      "parameters": {
+        "mount": "LEFT",
+        "channels": 1,
+        "slot": "2",
+        "well": "A1",
+        "origin": "bottom",
+        "offset": [
+          0,
+          0,
+          2
+        ],
+        "tip_length_mm": 50,
+        "speed": 20
+      },
+      "schema": "ot2.client/1"
+    },
+    {
+      "run_id": "demo-run",
+      "operation_id": "4",
+      "device_id": "ot2",
+      "action": "aspirate",
+      "parameters": {
+        "mount": "LEFT",
+        "channels": 1,
+        "volume_ul": 20,
+        "flow_rate_ul_s": 10
+      },
+      "schema": "ot2.client/1"
+    },
+    {
+      "run_id": "demo-run",
+      "operation_id": "5",
+      "device_id": "ot2",
+      "action": "move_to_well",
+      "parameters": {
+        "mount": "LEFT",
+        "channels": 1,
+        "slot": "3",
+        "well": "B1",
+        "origin": "bottom",
+        "offset": [
+          0,
+          0,
+          2
+        ],
+        "tip_length_mm": 50,
+        "speed": 20
+      },
+      "schema": "ot2.client/1"
+    },
+    {
+      "run_id": "demo-run",
+      "operation_id": "6",
+      "device_id": "ot2",
+      "action": "dispense",
+      "parameters": {
+        "mount": "LEFT",
+        "channels": 1,
+        "volume_ul": 20,
+        "flow_rate_ul_s": 10,
+        "empty_after": true
+      },
+      "schema": "ot2.client/1"
+    },
+    {
+      "run_id": "demo-run",
+      "operation_id": "7",
+      "device_id": "ot2",
+      "action": "drop_tip",
+      "parameters": {
+        "mount": "LEFT",
+        "channels": 1,
+        "tiprack_diameter_mm": 5.23,
+        "speed": 20
+      },
+      "schema": "ot2.client/1"
+    }
+  ],
+  "initial_sim": {
+    "pipette.volume": 0.0,
+    "pipette.tip_attached": false
+  },
+  "tolerances": {
+    "pipette.volume": 0.01,
+    "pipette.tip_attached": 0
+  },
+  "require_comparable": true,
+  "mounts": {
+    "LEFT": 1
+  },
+  "validation_checks": [
+    {
+      "name": "pipette_capacity",
+      "field": "pipette.volume",
+      "unit": "uL",
+      "frame": "",
+      "min": 0,
+      "max": 300
+    }
+  ],
+  "validation_validity_s": 5
+}

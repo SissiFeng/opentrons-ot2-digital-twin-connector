@@ -227,8 +227,8 @@
       },
       "non_tip_child_ids": [],
       "expected_child_count": 96,
-      "manifest_sha256": "UNVERIFIED",
-      "evidence": "SOURCE_INSPECTED: PR47 79efd967 materializes only pipette_tip_mesh_00..95 as nested children and spawns the static rack separately; accept and pin the 96-tip runtime manifest before execution"
+      "manifest_sha256": "5a5c37e58ce21886d10bfe48271ede795db7b1cb0313902c2245f4b6e0a0ce98",
+      "evidence": "SOURCE_INSPECTED: matterix-assets-internal objects/racks/tip_rack/tip-rack-runtime-manifest.json (sha256 30be9145bb8b7bf38ca4a770d0dea559b0b9d7285965905c9896cdad77911f77) pins the exact 96-child map. Binding remains UNVERIFIED until Isaac/PhysX runtime acceptance."
     }
   ],
   "contract_id": "bd710e8b7d66f1f739330945c13b6401450682a0a6a7675c02478cf8f44bbffc",

@@ -271,9 +271,9 @@ def build_ot2_action_cfg(action):
     """Translate one connector OT-2 semantic action into matterix_sm configs.
 
     One connector action may map to multiple primitives (e.g. PickUpTip =
-    move + tip-presence semantic).  A single config is returned for
-    one-to-one translations, otherwise a list of configs is returned
-    (StateMachine.set_action_sequence accepts both).
+    approach + attach + lift). A single config is returned for one-to-one
+    translations; otherwise a flat list is returned. The connector runtime
+    flattens all action results before calling StateMachine.set_action_sequence.
     """
     from unitelabs.opentrons_ot2.matterix.actions_runtime import (
         MatterixMoveToJointConfig,

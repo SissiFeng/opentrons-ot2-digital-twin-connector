@@ -17,8 +17,8 @@ class MatterixRuntimeUnavailable(RuntimeError):
 class MatterixActionFactory(Protocol):
     """Convert connector-owned semantic configs to installed Matterix configs."""
 
-    def build_ot2_action_cfg(self, action: OT2ActionCfg) -> object:
-        """Build one Matterix compositional-action configuration."""
+    def build_ot2_action_cfg(self, action: OT2ActionCfg) -> object | list[object] | tuple[object, ...]:
+        """Build one or more Matterix primitive-action configurations."""
         ...
 
 
@@ -34,7 +34,7 @@ class MatterixStateMachine(Protocol):
 class _ModuleActionFactory:
     module: ModuleType
 
-    def build_ot2_action_cfg(self, action: OT2ActionCfg) -> object:
+    def build_ot2_action_cfg(self, action: OT2ActionCfg) -> object | list[object] | tuple[object, ...]:
         return self.module.build_ot2_action_cfg(action)
 
 
@@ -64,9 +64,19 @@ def install_action_sequence(
     if not actions:
         msg = "Matterix OT-2 workflow contains no side-effecting action configs"
         raise MatterixRuntimeUnavailable(msg)
-    runtime_configs = tuple(factory.build_ot2_action_cfg(action) for action in actions)
-    if any(config is None for config in runtime_configs):
-        msg = "Matterix OT-2 action factory returned an empty action configuration"
-        raise MatterixRuntimeUnavailable(msg)
-    state_machine.set_action_sequence(list(runtime_configs))
-    return runtime_configs
+    runtime_configs: list[object] = []
+    for action in actions:
+        built = factory.build_ot2_action_cfg(action)
+        configs = tuple(built) if isinstance(built, list | tuple) else (built,)
+        if not configs or any(config is None for config in configs):
+            msg = f"Matterix OT-2 action factory returned an empty action configuration for {type(action).__name__}"
+            raise MatterixRuntimeUnavailable(msg)
+        if any(isinstance(config, list | tuple) for config in configs):
+            msg = (
+                "Matterix OT-2 action factory returned a nested sequence for "
+                f"{type(action).__name__}; return one flat list of primitive configs"
+            )
+            raise MatterixRuntimeUnavailable(msg)
+        runtime_configs.extend(configs)
+    state_machine.set_action_sequence(runtime_configs)
+    return tuple(runtime_configs)
